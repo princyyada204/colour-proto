@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>StudyFlow</title>
+  <style>
+    /* Import modern, clean font */
+    /* Add local Inter font-face */
+    @font-face {
+      font-family: 'Inter';
+      src: url('fonts/Inter-Regular.woff2') format('woff2');
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Inter';
+      src: url('fonts/Inter-SemiBold.woff2') format('woff2');
+      font-weight: 600;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Inter';
+      src: url('fonts/Inter-Bold.woff2') format('woff2');
+      font-weight: 700;
+      font-style: normal;
+    }
+    
+    /* Font Awesome icons as CSS content */
+    .fas::before {
+      font-family: monospace;
+      font-weight: bold;
+    }
+    .fa-trophy::before { content: "🏆"; }
+    .fa-fire::before { content: "🔥"; }
+    .fa-chart-bar::before { content: "📊"; }
+    .fa-chart-line::before { content: "📈"; }
+    .fa-clock::before { content: "⏰"; }
+    .fa-shield-alt::before { content: "🛡️"; }
+    .fa-bullseye::before { content: "🎯"; }
+    .fa-book::before { content: "📚"; }
+    .fa-calendar-alt::before { content: "📅"; }
+    .fa-bookmark::before { content: "🔖"; }
+    .fa-bars::before { content: "☰"; }
+    .fa-chevron-down::before { content: "▼"; }
+    .fa-play::before { content: "▶"; }
+    .fa-stop::before { content: "⏹"; }
+    .fa-plus::before { content: "+"; }
+    .fa-trash::before { content: "🗑"; }
+    .fa-save::before { content: "💾"; }
+    .fa-check::before { content: "✓"; }
+    .fa-external-link-alt::before { content: "↗"; }
+    .fa-sync-alt::before { content: "🔄"; }
+    .fa-download::before { content: "⬇"; }
+    .fa-cog::before { content: "⚙"; }
+    .fa-spinner::before { content: "⟳"; }
+    .fa-check-circle::before { content: "✅"; }
+    .fa-exclamation-triangle::before { content: "⚠"; }
+    .fa-redo::before { content: "↻"; }
+    
+    /* Spinner animation */
+    .fa-spin {
+      animation: fa-spin 2s infinite linear;
+    }
+    
+    @keyframes fa-spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    :root {
+      --color-body-bg: #D6E3F1;
+      --color-card-bg: #E3EEF8;
+      --color-primary-text: #3A4F73;
+      --color-secondary-text: #7A8EB0;
+      --color-xp-gradient: linear-gradient(90deg, #FF9AA2 0%, #FFB6C1 100%);
+      --color-streak-gradient: linear-gradient(90deg, #FFD19A 0%, #FFE0B2 100%);
+      --color-productive-gradient: linear-gradient(90deg, #A2D9CE 0%, #B2E5DC 100%);
+      --color-btn-primary-bg: #3A4F73;
+      --color-btn-secondary-bg: #E3EEF8;
+      --color-btn-primary-text: #FFFFFF;
+      --color-btn-secondary-text: #3A4F73;
+      --color-border: #BAC8DB;
+      --color-shadow-dark: #9FAFC8;
+      --color-shadow-light: #BAC8DB;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--color-body-bg);
+      color: var(--color-primary-text);
+      margin: 0;
+      padding: 0;
+      min-width: 400px;
+      min-height: 600px;
+      overflow-x: hidden;
+    }
+
+    .header {
+      background: #E0FBFC;
+      padding: 28px 24px 18px 24px;
+      text-align: center;
+      border-bottom: none;
+      border-radius: 0 0 24px 24px;
+      box-shadow: 0 2px 12px 0 #22577A33;
+    }
+
+    .brand {
+      font-weight: 700;
+      font-size: 1.7em;
+      color: #22223B;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+      text-shadow: none;
+    }
+
+    .user-stats {
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      margin-top: 10px;
+    }
+
+    .level-badge, .xp-badge, .streak-badge {
+      background: #98C1D9;
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 1em;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #22223B;
+      box-shadow: 0 1px 4px 0 #22577A33;
+      border: 1.5px solid #E0FBFC;
+    }
+    .xp-badge {
+      background: linear-gradient(90deg, #6A82FB 0%, #FC5C7D 100%);
+    }
+    .streak-badge {
+      background: linear-gradient(90deg, #FC5C7D 0%, #FFD200 100%);
+    }
+
+    .toggle-menu {
+      background: #E0FBFC;
+      margin: 28px 24px 24px 24px;
+      border-radius: 18px;
+      overflow: hidden;
+      border: none;
+      box-shadow: 0 2px 12px 0 #22577A33;
+    }
+
+    .menu-header {
+      background: transparent;
+      padding: 18px 24px;
+      font-weight: 700;
+      font-size: 1.1em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      color: #22223B;
+      border-radius: 16px;
+      transition: background 0.3s;
+    }
+    .menu-header:hover {
+      background: #98C1D9;
+      color: #22223B;
+    }
+    .menu-header i {
+      transition: transform 0.3s;
+    }
+    .menu-header.active i {
+      transform: rotate(180deg);
+    }
+    .menu-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s;
+      background: #98C1D9;
+      border-radius: 0 0 16px 16px;
+    }
+    .menu-content.active {
+      max-height: 500px;
+    }
+    .nav {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 12px 12px 18px 12px;
+    }
+    .nav-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      border-radius: 12px;
+      font-size: 1em;
+      background: transparent;
+      border: none;
+      text-align: left;
+      cursor: pointer;
+      color: #22223B;
+      transition: background 0.3s, color 0.3s, transform 0.2s;
+      width: 100%;
+      font-weight: 600;
+    }
+    .nav-btn.active, .nav-btn:hover {
+      background: #E0FBFC;
+      color: #22223B;
+      transform: translateX(5px);
+    }
+
+    .content {
+      padding: 28px 24px 24px 24px;
+      min-height: 300px;
+    }
+
+    .motivation-card, .productivity-graph, .weekly-productivity-chart, .visited-sites, .current-tab, .stat-card, .note-item, .goal-item, .reminder-item, .bookmark-item, .timer-settings, .focus-benefits, .bookmark-form {
+      background: #98C1D9;
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1.5px solid #E0FBFC;
+      box-shadow: 0 2px 12px 0 #22577A33;
+      color: #22223B;
+    }
+    .motivation-card {
+      background: #E0FBFC;
+      color: #22223B;
+      box-shadow: 0 2px 12px 0 #22577A33;
+    }
+    .motivation-card h3 {
+      color: #E0FBFC !important;
+      font-weight: 800 !important;
+      background: none !important;
+      text-shadow: none !important;
+      margin-bottom: 10px;
+    }
+    .productivity-graph h3, .weekly-productivity-chart h3, .visited-sites h3, .current-tab h3, .focus-benefits h4, .timer-settings h4 {
+      color: #3D5A80;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .stat-card {
+      text-align: center;
+      transition: transform 0.3s;
+      background: #E0FBFC;
+      border: 1.5px solid #98C1D9;
+      color: #293241;
+    }
+    .stat-card:hover {
+      transform: translateY(-3px) scale(1.03);
+      box-shadow: 0 4px 16px 0 #98C1D9;
+    }
+    .stat-value {
+      font-size: 1.5em;
+      font-weight: 700;
+      margin-bottom: 5px;
+      color: #3D5A80;
+      text-shadow: 0 1px 4px #E0FBFC;
+    }
+    .stat-label {
+      font-size: 0.95em;
+      opacity: 0.8;
+      color: #3D5A80;
+    }
+    .progress-bar {
+      background: #98C1D9;
+      border-radius: 10px;
+      height: 7px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      background: linear-gradient(90deg, #3D5A80 0%, #98C1D9 100%);
+      height: 100%;
+      border-radius: 10px;
+      transition: width 0.6s;
+    }
+    .productivity-graph {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .productivity-graph h3 {
+      margin: 0 0 15px 0;
+      font-size: 1.1em;
+      font-weight: 600;
+    }
+
+    .graph-container {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      height: 80px;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .graph-bar {
+      background: linear-gradient(to top, #4ade80, #22d3ee);
+      border-radius: 4px 4px 0 0;
+      min-height: 4px;
+      flex: 1;
+      transition: height 0.3s ease;
+      position: relative;
+    }
+
+    .graph-bar.good { background: linear-gradient(to top, #4ade80, #22d3ee); }
+    .graph-bar.average { background: linear-gradient(to top, #fbbf24, #f59e0b); }
+    .graph-bar.poor { background: linear-gradient(to top, #f87171, #ef4444); }
+
+    .graph-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8em;
+      opacity: 0.8;
+      margin-bottom: 15px;
+    }
+
+    .category-legend {
+      display: flex;
+      justify-content: space-around;
+      font-size: 0.8em;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .weekly-productivity-chart {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .weekly-productivity-chart h3 {
+      margin: 0 0 15px 0;
+      font-size: 1.1em;
+      font-weight: 600;
+    }
+
+    .productivity-bars {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      height: 100px;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .productivity-bar {
+      flex: 1;
+      border-radius: 4px 4px 0 0;
+      min-height: 4px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: end;
+    }
+
+    .productivity-segment {
+      border-radius: 2px;
+      min-height: 2px;
+    }
+
+    .productivity-segment.productive { background: #4ade80; }
+    .productivity-segment.distracting { background: #f87171; }
+    .productivity-segment.neutral { background: #9ca3af; }
+
+    .visited-sites {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .visited-sites h3 {
+      margin: 0 0 15px 0;
+      font-size: 1.1em;
+      font-weight: 600;
+    }
+
+    .site-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .site-item:last-child {
+      border-bottom: none;
+    }
+
+    .site-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .site-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .site-dot.productive { background: #4ade80; }
+    .site-dot.distracting { background: #f87171; }
+    .site-dot.neutral { background: #9ca3af; }
+
+    .site-name {
+      font-size: 0.9em;
+      flex: 1;
+    }
+
+    .site-time {
+      text-align: right;
+      font-size: 0.9em;
+      font-weight: 600;
+    }
+
+    .current-tab {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .current-tab h3 {
+      margin: 0 0 15px 0;
+      font-size: 1.1em;
+      font-weight: 600;
+    }
+
+    .tab-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .tab-icon {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .tab-icon.productive { background: #4ade80; }
+    .tab-icon.distracting { background: #f87171; }
+    .tab-icon.neutral { background: #9ca3af; }
+
+    .tab-details {
+      flex: 1;
+    }
+
+    .tab-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .tab-domain {
+      font-size: 0.8em;
+      opacity: 0.8;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      background: linear-gradient(90deg, #3D5A80 0%, #98C1D9 100%);
+      color: #E0FBFC;
+      border: none;
+      padding: 13px 22px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 1em;
+      font-weight: 700;
+      transition: background 0.3s, color 0.3s, transform 0.2s;
+      box-shadow: 0 2px 8px 0 #98C1D9;
+    }
+    .btn:hover {
+      background: #3D5A80;
+      color: #E0FBFC;
+      transform: translateY(-2px) scale(1.04);
+    }
+    .btn-primary {
+      background: linear-gradient(90deg, #3D5A80 0%, #98C1D9 100%);
+      color: #E0FBFC;
+    }
+    .btn-primary:hover {
+      background: #98C1D9;
+      color: #293241;
+    }
+    .btn-secondary {
+      background: #E0FBFC;
+      color: #3D5A80;
+    }
+    .btn-secondary:hover {
+      background: #98C1D9;
+      color: #293241;
+    }
+    .no-data {
+      text-align: center;
+      padding: 20px;
+      opacity: 1;
+      font-style: italic;
+      color: #3D5A80;
+      font-weight: 600;
+      font-size: 1.1em;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: #3D5A80;
+      font-weight: 600;
+    }
+    .error-message {
+      background: #3D5A80;
+      color: #E0FBFC;
+      border: 1.5px solid #3D5A80;
+      font-weight: 600;
+    }
+    .success-message {
+      background: #98C1D9;
+      color: #293241;
+      border: 1.5px solid #98C1D9;
+      font-weight: 600;
+    }
+
+    /* Site Blocker Styles */
+    .input-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+
+    .input-group input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      font-size: 0.9em;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      backdrop-filter: blur(10px);
+    }
+
+    .input-group input::placeholder {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .blocked-sites-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: 20px;
+    }
+
+    .site-item-blocker {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      margin-bottom: 6px;
+      font-size: 0.9em;
+    }
+
+    .remove-btn {
+      background: #f87171;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 0.8em;
+      transition: background 0.3s ease;
+    }
+
+    .remove-btn:hover {
+      background: #ef4444;
+    }
+
+    .common-sites-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .common-sites-section h4 {
+      margin: 0 0 12px 0;
+      font-size: 1em;
+      opacity: 0.8;
+    }
+
+    .common-sites-list {
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .common-site-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      margin-bottom: 4px;
+      font-size: 0.85em;
+    }
+
+    .add-common-btn {
+      background: #4ade80;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 3px 6px;
+      cursor: pointer;
+      font-size: 0.8em;
+      transition: background 0.3s ease;
+    }
+
+    .add-common-btn:hover {
+      background: #22d3ee;
+    }
+
+    /* Focus Timer Styles */
+    .focus-timer {
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .timer-display {
+      font-size: 2.5em;
+      font-weight: bold;
+      color: #4ade80;
+      margin-bottom: 16px;
+      text-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+    }
+
+    .timer-controls {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .timer-settings {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+
+    .timer-settings h4 {
+      margin: 0 0 15px 0;
+      font-size: 1em;
+      color: #4ade80;
+    }
+
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .setting-row input {
+      width: 60px;
+      padding: 5px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      text-align: center;
+    }
+
+    .focus-benefits {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(74, 222, 128, 0.1);
+      border-radius: 10px;
+      font-size: 0.9em;
+      border: 1px solid rgba(74, 222, 128, 0.2);
+    }
+
+    .focus-benefits h4 {
+      margin: 0 0 10px 0;
+      color: #4ade80;
+    }
+
+    .focus-benefits ul {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    /* Notes Styles */
+    #noteTextarea {
+      width: 100%;
+      height: 120px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 10px;
+      padding: 12px;
+      resize: vertical;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      backdrop-filter: blur(10px);
+      font-family: inherit;
+      margin-bottom: 15px;
+    }
+
+    #noteTextarea::placeholder {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .notes-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+
+    .note-item {
+      background: linear-gradient(135deg, #E9E6F6 60%, #B7A4F7 100%);
+      border: 1.5px solid #B7A4F7;
+      color: #22223B;
+    }
+
+    .note-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .note-date {
+      font-size: 0.8em;
+      opacity: 0.7;
+    }
+
+    .note-content {
+      font-size: 0.9em;
+      line-height: 1.4;
+    }
+
+    /* Goals Styles */
+    .goal-form {
+      margin-bottom: 20px;
+    }
+
+    .goal-form input, .goal-form select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      margin-bottom: 10px;
+    }
+
+    .goal-form input::placeholder {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .goals-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .goal-item {
+      background: linear-gradient(135deg, #E9E6F6 60%, #B7A4F7 100%);
+      border: 1.5px solid #B7A4F7;
+      color: #22223B;
+    }
+
+    .goal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .goal-title {
+      font-weight: 600;
+      font-size: 1.1em;
+    }
+
+    .goal-category {
+      background: linear-gradient(90deg, #FFD43B 60%, #FFE066 100%);
+      color: #6C4AB6;
+      border-radius: 12px;
+      padding: 4px 10px;
+      font-size: 0.85em;
+      font-weight: 600;
+    }
+
+    .goal-progress {
+      margin-bottom: 10px;
+    }
+
+    .goal-progress-bar {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      height: 8px;
+      overflow: hidden;
+      margin-bottom: 5px;
+    }
+
+    .goal-progress-fill {
+      background: linear-gradient(90deg, #4ade80, #22d3ee);
+      height: 100%;
+      border-radius: 10px;
+      transition: width 0.6s ease;
+    }
+
+    .goal-progress-text {
+      font-size: 0.9em;
+      opacity: 0.8;
+    }
+
+    .goal-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .goal-btn {
+      background: linear-gradient(90deg, #7EDFC5 60%, #B7A4F7 100%);
+      color: #22223B;
+      border-radius: 8px;
+      font-weight: 700;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .goal-btn:hover {
+      background: linear-gradient(90deg, #FFD43B 60%, #F7A4C7 100%);
+      color: #6C4AB6;
+    }
+
+    .goal-btn.complete {
+      background: #7ed6c1;
+      color: #fff;
+    }
+
+    .goal-btn.delete {
+      background: #FFD43B;
+      color: #fff;
+    }
+
+    /* Calendar Styles */
+    .reminder-form {
+      margin-bottom: 20px;
+    }
+
+    .reminder-form input, .reminder-form textarea, .reminder-form select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      margin-bottom: 10px;
+      backdrop-filter: blur(10px);
+    }
+
+    .reminder-form input::placeholder, .reminder-form textarea::placeholder {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .reminders-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .reminder-item {
+      background: linear-gradient(135deg, #E9E6F6 60%, #B7A4F7 100%);
+      border: 1.5px solid #B7A4F7;
+      color: #22223B;
+    }
+
+    .reminder-item.upcoming {
+      border-color: #fbbf24;
+      background: rgba(251, 191, 36, 0.1);
+    }
+
+    .reminder-item.overdue {
+      border-color: #f87171;
+      background: rgba(248, 113, 113, 0.1);
+    }
+
+    .reminder-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .reminder-title {
+      font-weight: 600;
+      font-size: 1.1em;
+    }
+
+    .reminder-category {
+      background: linear-gradient(90deg, #FFD43B 60%, #FFE066 100%);
+      color: #6C4AB6;
+      border-radius: 12px;
+      padding: 4px 10px;
+      font-size: 0.85em;
+      font-weight: 600;
+    }
+
+    .reminder-datetime {
+      font-size: 0.9em;
+      opacity: 0.8;
+      margin-bottom: 8px;
+    }
+
+    .reminder-description {
+      font-size: 0.9em;
+      opacity: 0.9;
+      line-height: 1.4;
+      margin-bottom: 10px;
+    }
+
+    .reminder-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .reminder-btn {
+      background: linear-gradient(90deg, #7EDFC5 60%, #B7A4F7 100%);
+      color: #22223B;
+      border-radius: 8px;
+      font-weight: 700;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .reminder-btn:hover {
+      background: linear-gradient(90deg, #FFD43B 60%, #F7A4C7 100%);
+      color: #6C4AB6;
+    }
+
+    .reminder-btn.complete {
+      background: #7ed6c1;
+      color: #fff;
+    }
+
+    .reminder-btn.delete {
+      background: #FFD43B;
+      color: #fff;
+    }
+
+    /* Bookmarks Styles */
+    .bookmark-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .bookmark-stat {
+      background: #E0FBFC;
+      border-radius: 12px;
+      padding: 15px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .bookmark-stat-value {
+      font-size: 1.5em;
+      font-weight: 700;
+      margin-bottom: 5px;
+      color: #4ade80;
+    }
+
+    .bookmark-stat-label {
+      font-size: 0.9em;
+      opacity: 0.8;
+    }
+
+    .bookmark-categories {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .category-filter {
+      background: #E6EEFF;
+      color: #6A82FB;
+      border: 1.5px solid #E6EEFF;
+      border-radius: 20px;
+      font-weight: 600;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .category-filter.active, .category-filter:hover {
+      background: #22223B;
+      color: #98C1D9;
+    }
+
+    .bookmarks-list {
+      max-height: 400px;
+      overflow-y: auto;
+      margin-bottom: 20px;
+    }
+
+    .bookmark-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 15px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .bookmark-item:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateX(5px);
+    }
+
+    .bookmark-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .bookmark-favicon {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .bookmark-details {
+      flex: 1;
+    }
+
+    .bookmark-title {
+      font-weight: 500;
+      margin-bottom: 2px;
+      font-size: 0.95em;
+    }
+
+    .bookmark-url {
+      font-size: 0.8em;
+      opacity: 0.7;
+    }
+
+    .bookmark-meta {
+      text-align: right;
+      font-size: 0.8em;
+      margin-right: 10px;
+    }
+
+    .bookmark-time {
+      font-weight: 600;
+      color: #4ade80;
+    }
+
+    .bookmark-category {
+      opacity: 0.7;
+      margin-top: 2px;
+    }
+
+    .bookmark-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .bookmark-actions .btn {
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .bookmark-form input::placeholder, .bookmark-form select {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .bookmark-form select option {
+      background: #333;
+      color: white;
+    }
+
+    .fa-upload::before { content: "⬆"; }
+    .fa-file-import::before { content: "📁"; }
+
+    /* Scrollbar Styles */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #E0FBFC;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #6A82FB;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #FC5C7D;
+    }
+    /* Make all card headers and important info text bold pastel */
+    .motivation-card h3, .productivity-graph h3, .weekly-productivity-chart h3, .visited-sites h3, .current-tab h3, .focus-benefits h4, .timer-settings h4, .stat-label, .note-header, .goal-header, .reminder-header, .bookmark-info {
+      color: #6A82FB !important;
+      font-weight: 700;
+    }
+    /* Make all button text bold and white for contrast */
+    .btn, .btn-primary, .btn-secondary, .goal-btn, .reminder-btn {
+      font-weight: 700;
+      color: #fff !important;
+    }
+    /* Input and form field text should always be dark and bold */
+    .input-group input, .goal-form input, .goal-form select, .reminder-form input, .reminder-form textarea, .reminder-form select, #noteTextarea, .bookmark-form input, .bookmark-form select {
+      background: #98C1D9;
+      color: #22223B;
+      border: 1.5px solid #E0FBFC;
+      border-radius: 10px;
+      font-size: 1em;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      font-family: 'Inter', sans-serif;
+      box-shadow: 0 1px 4px 0 #22577A33;
+      font-weight: 600;
+    }
+    .input-group input::placeholder, .goal-form input::placeholder, .reminder-form input::placeholder, .reminder-form textarea::placeholder, #noteTextarea::placeholder, .bookmark-form input::placeholder {
+      color: #22223B99;
+      opacity: 0.7;
+      font-weight: 600;
+    }
+    /* Make all numbers in input fields bold and dark */
+    input[type="number"] {
+      color: #22223B !important;
+      font-weight: 700 !important;
+    }
+    /* Section headers like 'Timer Settings' should be bold, dark accent, and pop */
+    .timer-settings h4, .focus-benefits h4 {
+      color: #6A82FB !important;
+      font-weight: 800 !important;
+      text-shadow: 0 1px 4px #E6EEFF;
+      letter-spacing: 0.5px;
+    }
+    /* All form labels should be dark and bold */
+    label, .setting-row span {
+      color: #22223B !important;
+      font-weight: 600 !important;
+    }
+    .alert-card {
+      background: #E0FBFC;
+      color: #22223B;
+      border-radius: 18px;
+      box-shadow: 0 2px 12px 0 #E0FBFC33;
+      padding: 18px 20px 16px 20px;
+      margin: 18px 20px 0 20px;
+      margin-bottom: 18px;
+      border: 1.5px solid #E0FBFC;
+    }
+    .alert-card h3 {
+      color: #22223B;
+      font-weight: 800;
+      margin-top: 0;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+    #alertList {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .alert-btn {
+      background: #fff;
+      color: #6A82FB;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-weight: 700;
+      font-size: 1em;
+      cursor: pointer;
+      box-shadow: 0 1px 4px 0 #E6EEFF;
+      transition: background 0.2s, color 0.2s;
+      text-align: left;
+    }
+    .alert-btn:hover {
+      background: #E6EEFF;
+      color: #FC5C7D;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <i class="fas fa-trophy"></i>
+      <span>StudyFlow</span>
+    </div>
+    <div class="user-stats">
+      <span class="level-badge">
+        <i class="fas fa-trophy"></i>
+        Level <span id="level">1</span>
+      </span>
+      <span class="xp-badge">
+        <span id="xp">0</span> XP
+      </span>
+      <span class="streak-badge">
+        <i class="fas fa-fire"></i>
+        <span id="streak">0</span> day streak
+      </span>
+    </div>
+  </div>
+
+  <div class="toggle-menu">
+    <div class="menu-header" id="menuToggle">
+      <span><i class="fas fa-bars"></i> Navigation Menu</span>
+      <i class="fas fa-chevron-down"></i>
+    </div>
+    <div class="menu-content" id="menuContent">
+      <div class="nav">
+        <button class="nav-btn active" data-page="dashboard">
+          <i class="fas fa-chart-bar"></i> Dashboard
+        </button>
+        <button class="nav-btn" data-page="analytics">
+          <i class="fas fa-chart-line"></i> Web Analytics
+        </button>
+        <button class="nav-btn" data-page="focus">
+          <i class="fas fa-clock"></i> Focus Session
+        </button>
+        <button class="nav-btn" data-page="blocker">
+          <i class="fas fa-shield-alt"></i> Site Blocker
+        </button>
+        <button class="nav-btn" data-page="goals">
+          <i class="fas fa-bullseye"></i> Goals
+        </button>
+        <button class="nav-btn" data-page="notes">
+          <i class="fas fa-book"></i> Notes
+        </button>
+        <button class="nav-btn" data-page="calendar">
+          <i class="fas fa-calendar-alt"></i> Calendar
+        </button>
+        <button class="nav-btn" data-page="bookmarks">
+          <i class="fas fa-bookmark"></i> Bookmarks
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- ALERTS TAB -->
+  <div class="alert-card">
+    <h3>Alerts</h3>
+    <div id="alertList"></div>
+  </div>
+
+  <div class="content" id="mainContent">
+    <!-- Dashboard Page -->
+    <div id="dashboardPage">
+      <div class="motivation-card">
+        <h3>Daily Motivation</h3>
+        <div id="motivationText">Innovation distinguishes between a leader and a follower. – Steve Jobs</div>
+      </div>
+      
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value focus-score" id="focusScoreValue">0%</div>
+          <div class="stat-label">Focus Score</div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="focusProgressBar" style="width: 0%;"></div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalTimeValue">0h</div>
+          <div class="stat-label">Total Time</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value productive" id="productiveTimeValue">0h</div>
+          <div class="stat-label">Productive</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="sitesVisitedValue">0</div>
+          <div class="stat-label">Sites Visited</div>
+        </div>
+      </div>
+
+      <div class="productivity-graph">
+        <h3>7-Day Focus Score Trend</h3>
+        <div class="graph-container" id="focusChart">
+          <!-- Focus score chart will be populated here -->
+        </div>
+        <div class="graph-labels" id="focusChartLabels">
+          <!-- Chart labels will be populated here -->
+        </div>
+      </div>
+
+      <div class="weekly-productivity-chart">
+        <h3>Weekly Productivity Breakdown</h3>
+        <div class="productivity-bars" id="productivityChart">
+          <!-- Productivity breakdown chart will be populated here -->
+        </div>
+        <div class="graph-labels" id="productivityChartLabels">
+          <!-- Chart labels will be populated here -->
+        </div>
+        <div class="category-legend">
+          <div class="legend-item">
+            <div class="legend-dot" style="background: #4ade80;"></div>
+            <span>Productive</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background: #f87171;"></div>
+            <span>Distracting</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background: #9ca3af;"></div>
+            <span>Neutral</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Goals Preview on Dashboard -->
+      <div class="productivity-graph">
+        <h3>Active Goals</h3>
+        <div id="dashboardGoals">
+          <!-- Goals preview will be populated here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Web Analytics Page -->
+    <div id="analyticsPage" style="display:none;">
+      <div class="visited-sites">
+        <h3>Sites Visited Today</h3>
+        <div id="visitedSitesList">
+          <!-- Sites list will be populated here -->
+        </div>
+      </div>
+      
+      <div id="currentTabSection">
+        <!-- Current tab info will be populated here -->
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="viewFullAnalyticsBtn">
+          <i class="fas fa-external-link-alt"></i> Full Analytics
+        </button>
+        <button class="btn" id="refreshDataBtn">
+          <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Focus Page -->
+    <div id="focusPage" style="display:none;">
+      <div class="stat-card">
+        <h2><i class="fas fa-clock"></i> Focus Session</h2>
+        <p>Start a focused study session with enhanced site blocking.</p>
+        
+        <div class="timer-settings">
+          <h4><i class="fas fa-cog"></i> Timer Settings</h4>
+          <div class="setting-row">
+            <span>Focus Duration (minutes):</span>
+            <input type="number" id="focusDuration" value="25" min="5" max="120">
+          </div>
+          <div class="setting-row">
+            <span>Break Duration (minutes):</span>
+            <input type="number" id="breakDuration" value="5" min="1" max="30">
+          </div>
+          <div class="setting-row">
+            <span>Long Break (every 4 sessions):</span>
+            <input type="number" id="longBreakDuration" value="15" min="5" max="60">
+          </div>
+        </div>
+
+        <div class="focus-timer">
+          <div class="timer-display" id="timerDisplay">25:00</div>
+          <div class="timer-controls">
+            <button class="btn btn-primary" id="startFocusBtn">
+              <i class="fas fa-play"></i> Start Focus
+            </button>
+            <button class="btn" id="stopFocusBtn" style="display:none;">
+              <i class="fas fa-stop"></i> End Session
+            </button>
+            <button class="btn btn-secondary" id="openPomodoroBtn" style="margin-top: 10px;">
+              <i class="fas fa-external-link-alt"></i> Open Full Pomodoro Timer
+            </button>
+          </div>
+        </div>
+        <div class="focus-benefits">
+          <h4>Focus Session Benefits:</h4>
+          <ul>
+            <li>Earn 2 XP per minute of focused study</li>
+            <li>Temporarily block additional distracting sites</li>
+            <li>Track your productivity streaks</li>
+            <li>Uses your custom blocked sites list + extra focus sites</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Site Blocker Page -->
+    <div id="blockerPage" style="display:none;">
+      <div class="stat-card">
+        <h2><i class="fas fa-shield-alt"></i> Site Blocker</h2>
+        <p>Block distracting websites to stay focused on your studies.</p>
+        
+        <div class="input-group">
+          <input type="text" id="siteInput" placeholder="e.g. facebook.com, youtube.com">
+          <button class="btn" id="addSiteBtn">
+            <i class="fas fa-plus"></i> Add
+          </button>
+        </div>
+        
+        <div class="blocked-sites-list" id="blockedSitesList">
+          <!-- Blocked sites will be populated here -->
+        </div>
+        
+        <div class="common-sites-section">
+          <h4><i class="fas fa-list"></i> Common Distracting Sites</h4>
+          <p style="font-size: 0.85em; opacity: 0.8; margin-bottom: 10px;">Click + to quickly add popular distracting sites:</p>
+          <div class="common-sites-list" id="commonSitesList">
+            <!-- Common sites will be populated here -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Goals Page -->
+    <div id="goalsPage" style="display:none;">
+      <div class="stat-card">
+        <h2><i class="fas fa-bullseye"></i> Goals</h2>
+        <p>Set and track your academic or personal goals.</p>
+        
+        <div class="goal-form">
+          <input type="text" id="goalTitle" placeholder="Goal title (e.g., Complete Math Assignment)">
+          <input type="text" id="goalDescription" placeholder="Description (optional)">
+          <select id="goalCategory">
+            <option value="study">Study</option>
+            <option value="exercise">Exercise</option>
+            <option value="reading">Reading</option>
+            <option value="project">Project</option>
+            <option value="skill">Skill Development</option>
+            <option value="other">Other</option>
+          </select>
+          <input type="number" id="goalTarget" placeholder="Target (e.g., 5 for 5 hours)" min="1">
+          <button class="btn btn-primary" id="addGoalBtn">
+            <i class="fas fa-plus"></i> Add Goal
+          </button>
+        </div>
+        
+        <div class="goals-list" id="goalsList">
+          <!-- Goals will be populated here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes Page -->
+    <div id="notesPage" style="display:none;">
+      <div class="stat-card">
+        <h2><i class="fas fa-book"></i> Quick Notes</h2>
+        <textarea id="noteTextarea" placeholder="Take notes here..."></textarea>
+        <button class="btn btn-primary" id="saveNoteBtn">
+          <i class="fas fa-save"></i> Save Note
+        </button>
+        
+        <div class="notes-list" id="notesList">
+          <!-- Notes will be populated here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar Page -->
+    <div id="calendarPage" class="page-content" style="display:none;">
+      <div class="stat-card">
+        <h2><i class="fas fa-calendar-alt"></i> Study Calendar & Reminders</h2>
+        <p>Set reminders for important study sessions, exams, and deadlines.</p>
+        
+        <div class="reminder-form">
+          <input type="text" id="reminderTitle" placeholder="Reminder title (e.g., Math Exam)">
+          <textarea id="reminderDescription" placeholder="Description (optional)" rows="2"></textarea>
+          <input type="date" id="reminderDate">
+          <input type="time" id="reminderTime">
+          <select id="reminderCategory">
+            <option value="exam">Exam</option>
+            <option value="assignment">Assignment</option>
+            <option value="study">Study Session</option>
+            <option value="deadline">Deadline</option>
+            <option value="meeting">Meeting</option>
+            <option value="other">Other</option>
+          </select>
+          <button class="btn btn-primary" id="addReminderBtn">
+            <i class="fas fa-plus"></i> Add Reminder
+          </button>
+        </div>
+        
+        <div class="reminders-list" id="remindersList">
+          <!-- Reminders will be populated here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Bookmarks Page -->
+    <div id="bookmarksPage" class="page-content" style="display:none;">
+      <div class="stat-card">
+        <h2><i class="fas fa-bookmark"></i> Productive Bookmarks</h2>
+        <p>Automatically bookmarked productive sites based on your usage patterns.</p>
+        
+        <!-- Add Custom Bookmark Form -->
+        <div class="bookmark-form" style="background: rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid rgba(255, 255, 255, 0.2);">
+          <h4 style="margin: 0 0 15px 0; color: #4ade80;"><i class="fas fa-plus"></i> Add Custom Bookmark</h4>
+          <input type="text" id="customBookmarkTitle" placeholder="Bookmark title (e.g., Khan Academy)" style="width: 100%; padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; background: rgba(255, 255, 255, 0.1); color: white; margin-bottom: 10px; backdrop-filter: blur(10px);">
+          <input type="url" id="customBookmarkUrl" placeholder="Website URL (e.g., https://khanacademy.org)" style="width: 100%; padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; background: rgba(255, 255, 255, 0.1); color: white; margin-bottom: 10px; backdrop-filter: blur(10px);">
+          <select id="customBookmarkCategory" style="width: 100%; padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 8px; background: rgba(255, 255, 255, 0.1); color: white; margin-bottom: 15px;">
+            <option value="learning">Learning</option>
+            <option value="research">Research</option>
+            <option value="tools">Tools</option>
+            <option value="documentation">Documentation</option>
+          </select>
+          <button class="btn btn-primary" id="addCustomBookmarkBtn" style="width: 100%;">
+            <i class="fas fa-plus"></i> Add Bookmark
+          </button>
+        </div>
+        
+        <div class="bookmark-stats">
+          <div class="bookmark-stat">
+            <div class="bookmark-stat-value" id="totalBookmarks">0</div>
+            <div class="bookmark-stat-label">Total Bookmarks</div>
+          </div>
+          <div class="bookmark-stat">
+            <div class="bookmark-stat-value" id="newBookmarks">0</div>
+            <div class="bookmark-stat-label">This Week</div>
+          </div>
+        </div>
+        
+        <div class="bookmark-categories">
+          <button class="category-filter active" data-category="all">All</button>
+          <button class="category-filter" data-category="learning">Learning</button>
+          <button class="category-filter" data-category="research">Research</button>
+          <button class="category-filter" data-category="tools">Tools</button>
+          <button class="category-filter" data-category="documentation">Documentation</button>
+        </div>
+        
+        <div class="bookmarks-list" id="bookmarksList">
+          <!-- Bookmarks will be populated here -->
+        </div>
+        
+        <div class="bookmark-actions">
+          <button class="btn" id="refreshBookmarksBtn">
+            <i class="fas fa-sync-alt"></i> Refresh Bookmarks
+          </button>
+          <button class="btn" id="exportBookmarksBtn">
+            <i class="fas fa-download"></i> Export Bookmarks
+          </button>
+          <button class="btn" id="importBookmarksBtn">
+            <i class="fas fa-file-import"></i> Import Bookmarks
+          </button>
+          <input type="file" id="importFileInput" accept=".json" style="display: none;">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="chart.js"></script>
+  <script src="popup.js"></script>
+  <script src="popup-inline.js"></script>
+</body>
+</html>
