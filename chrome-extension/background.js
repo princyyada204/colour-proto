@@ -22,6 +22,7 @@ class StudyFlowTracker {
     this.currentActiveTab = null;
     this.lastActiveTime = Date.now();
     this.updateInterval = 15000; // 15 seconds
+    this.lastResetDate = null;
     this.initializeExtension();
   }
 
@@ -30,23 +31,152 @@ class StudyFlowTracker {
     this.setupEventListeners();
     this.startPeriodicUpdates();
     this.loadExistingData();
+    this.checkDailyReset();
   }
 
   async loadExistingData() {
     try {
-      const result = await chrome.storage.local.get();
-      for (const [key, value] of Object.entries(result)) {
+      const result = await chrome.storage.local.get(['lastResetDate']);
+      this.lastResetDate = result.lastResetDate || this.getToday();
+      
+      // Check if we need to reset data for a new day
+      if (this.lastResetDate !== this.getToday()) {
+        await this.performDailyReset();
+        return;
+      }
+      
+      // Load existing tab data only if it's from today
+      const allData = await chrome.storage.local.get();
+      for (const [key, value] of Object.entries(allData)) {
         if (key.startsWith('tab_')) {
           const tabId = parseInt(key.replace('tab_', ''));
-          this.tabData.set(tabId, {
-            ...value,
-            lastAccessed: new Date(value.lastAccessed)
-          });
+          // Only load if the data is from today
+          const dataDate = new Date(value.lastAccessed).toISOString().split('T')[0];
+          if (dataDate === this.getToday()) {
+            this.tabData.set(tabId, {
+              ...value,
+              lastAccessed: new Date(value.lastAccessed)
+            });
+          }
         }
       }
       console.log('Loaded existing monitoring data:', this.tabData.size, 'tabs');
     } catch (error) {
       console.error('Error loading existing data:', error);
+    }
+  }
+
+  getToday() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  async checkDailyReset() {
+    const today = this.getToday();
+    
+    if (this.lastResetDate !== today) {
+      await this.performDailyReset();
+    }
+    
+    // Set up daily reset check at midnight
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    
+    const msUntilMidnight = tomorrow.getTime() - now.getTime();
+    
+    setTimeout(() => {
+      this.performDailyReset();
+      // Set up recurring daily reset
+      setInterval(() => {
+        this.performDailyReset();
+      }, 24 * 60 * 60 * 1000); // 24 hours
+    }, msUntilMidnight);
+  }
+
+  async performDailyReset() {
+    const today = this.getToday();
+    const yesterday = this.getYesterday();
+    
+    console.log('Performing daily reset for:', today);
+    
+    try {
+      // Save current day's final stats before reset
+      if (this.lastResetDate && this.lastResetDate !== today) {
+        await this.saveDailyStats();
+      }
+      
+      // Archive yesterday's tab data
+      await this.archiveTabData(yesterday);
+      
+      // Clear current tab data
+      this.tabData.clear();
+      
+      // Remove old tab data from storage
+      await this.clearOldTabData();
+      
+      // Update last reset date
+      this.lastResetDate = today;
+      await chrome.storage.local.set({ lastResetDate: today });
+      
+      // Reset current active tab tracking
+      this.currentActiveTab = null;
+      this.lastActiveTime = Date.now();
+      
+      console.log('Daily reset completed for:', today);
+      
+      // Notify popup/dashboard of reset
+      try {
+        chrome.runtime.sendMessage({ action: 'daily_reset', date: today });
+      } catch (e) {
+        // Ignore if no listeners
+      }
+      
+    } catch (error) {
+      console.error('Error performing daily reset:', error);
+    }
+  }
+
+  getYesterday() {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  }
+
+  async archiveTabData(date) {
+    try {
+      const tabDataArray = Array.from(this.tabData.values()).map(tab => ({
+        ...tab,
+        timeSpent: Math.round(tab.timeSpent / 60), // Convert to minutes
+        date: date
+      }));
+      
+      if (tabDataArray.length > 0) {
+        await chrome.storage.local.set({ [`archived_tabs_${date}`]: tabDataArray });
+        console.log(`Archived ${tabDataArray.length} tabs for ${date}`);
+      }
+    } catch (error) {
+      console.error('Error archiving tab data:', error);
+    }
+  }
+
+  async clearOldTabData() {
+    try {
+      const result = await chrome.storage.local.get();
+      const keysToRemove = [];
+      
+      for (const key of Object.keys(result)) {
+        if (key.startsWith('tab_')) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      if (keysToRemove.length > 0) {
+        await chrome.storage.local.remove(keysToRemove);
+        console.log(`Cleared ${keysToRemove.length} old tab data entries`);
+      }
+    } catch (error) {
+      console.error('Error clearing old tab data:', error);
     }
   }
 
@@ -338,7 +468,7 @@ class StudyFlowTracker {
   }
 
   async saveDailyStats() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = this.getToday();
     
     let totalTime = 0;
     let productiveTime = 0;
@@ -391,6 +521,12 @@ class StudyFlowTracker {
     // Update every 15 seconds
     setInterval(async () => {
       try {
+        // Check if we need to perform daily reset
+        if (this.lastResetDate !== this.getToday()) {
+          await this.performDailyReset();
+          return;
+        }
+        
         if (this.currentActiveTab) {
           await this.updateTabTime(this.currentActiveTab);
           this.lastActiveTime = Date.now(); // Reset timer
@@ -412,17 +548,22 @@ class StudyFlowTracker {
   }
 
   async getAllTabData() {
+    const today = this.getToday();
     const result = await chrome.storage.local.get();
     const tabs = [];
     
     for (const [key, value] of Object.entries(result)) {
       if (key.startsWith('tab_')) {
-        tabs.push({
-          ...value,
-          lastAccessed: new Date(value.lastAccessed),
-          timeSpent: Math.round(value.timeSpent / 60), // Convert to minutes for display
-          visitCount: value.visitCount || 1
-        });
+        // Only include today's data
+        const dataDate = new Date(value.lastAccessed).toISOString().split('T')[0];
+        if (dataDate === today) {
+          tabs.push({
+            ...value,
+            lastAccessed: new Date(value.lastAccessed),
+            timeSpent: Math.round(value.timeSpent / 60), // Convert to minutes for display
+            visitCount: value.visitCount || 1
+          });
+        }
       }
     }
     
@@ -463,13 +604,47 @@ class StudyFlowTracker {
     
     return stats.reverse();
   }
+
+  async getArchivedTabData(date) {
+    try {
+      const result = await chrome.storage.local.get([`archived_tabs_${date}`]);
+      return result[`archived_tabs_${date}`] || [];
+    } catch (error) {
+      console.error('Error getting archived tab data:', error);
+      return [];
+    }
+  }
+
+  async cleanupOldData(daysToKeep = 30) {
+    try {
+      const result = await chrome.storage.local.get();
+      const keysToRemove = [];
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+      const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+      
+      for (const key of Object.keys(result)) {
+        if (key.startsWith('daily_') || key.startsWith('archived_tabs_')) {
+          const dateMatch = key.match(/(\d{4}-\d{2}-\d{2})/);
+          if (dateMatch && dateMatch[1] < cutoffDateStr) {
+            keysToRemove.push(key);
+          }
+        }
+      }
+      
+      if (keysToRemove.length > 0) {
+        await chrome.storage.local.remove(keysToRemove);
+        console.log(`Cleaned up ${keysToRemove.length} old data entries`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up old data:', error);
+    }
+  }
 }
 
 // Initialize the web monitoring tracker
 const studyFlowTracker = new StudyFlowTracker();
 
-// Set up weekly cleanup of old data
-chrome.alarms.create('weeklyCleanup', { periodInMinutes: 10080 }); // 7 days
 // ========== REMINDER SYSTEM ==========
 
 // Check for due reminders every minute
@@ -478,8 +653,6 @@ chrome.alarms.create('checkReminders', { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'checkReminders') {
     checkDueReminders();
-  } else if (alarm.name === 'weeklyCleanup') {
-    studyFlowTracker.cleanupOldData(30); // Keep 30 days of data
   } else if (alarm.name === 'dailyMotivation') {
     chrome.notifications.create({
       type: 'basic',
@@ -979,6 +1152,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true;
       
+    case 'forceReset':
+      studyFlowTracker.performDailyReset().then(() => {
+        sendResponse({ success: true, message: 'Daily reset completed' });
+      }).catch(error => {
+        sendResponse({ success: false, error: error.message });
+      });
+      return true;
+      
+    case 'getArchivedData':
+      studyFlowTracker.getArchivedTabData(message.date).then(data => {
+        sendResponse({ success: true, data: data });
+      }).catch(error => {
+        sendResponse({ success: false, error: error.message });
+      });
+      return true;
+      
     case 'saveData':
       // Force update current active tab time
       if (studyFlowTracker.currentActiveTab) {
@@ -997,6 +1186,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ success: false, error: error.message });
         });
       }
+      return true;
+      
+    case 'cleanupOldData':
+      studyFlowTracker.cleanupOldData(message.daysToKeep || 30).then(() => {
+        sendResponse({ success: true, message: 'Old data cleaned up' });
+      }).catch(error => {
+        sendResponse({ success: false, error: error.message });
+      });
       return true;
       
     case 'SET_REMINDER_ALARM':
