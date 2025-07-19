@@ -33,6 +33,12 @@
       "js": ["content.js"]
     }
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["bookmarks.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline' data:;"
   }

@@ -769,20 +769,21 @@ function snoozeReminder(reminderId, minutes) {
 
 // ========== PRODUCTIVE BOOKMARKS SYSTEM ==========
 
-// Update bookmarks every 5 minutes
-setInterval(updateProductiveBookmarks, 5 * 60 * 1000);
+// Update bookmarks every 2 minutes for more responsive auto-bookmarking
+setInterval(updateProductiveBookmarks, 2 * 60 * 1000);
 
 async function updateProductiveBookmarks() {
   try {
     const tabData = await studyFlowTracker.getAllTabData();
     const productiveTabs = tabData.filter(tab => 
       tab.category === 'productive' && 
-      tab.timeSpent >= 5 // At least 5 minutes
+      tab.timeSpent >= 30 // At least 30 minutes for auto-bookmarking
     );
     
     chrome.storage.local.get(['productiveBookmarks'], (result) => {
       const existingBookmarks = result.productiveBookmarks || [];
       const bookmarkMap = new Map(existingBookmarks.map(b => [b.domain, b]));
+      let newBookmarksAdded = 0;
       
       productiveTabs.forEach(tab => {
         const existing = bookmarkMap.get(tab.domain);
@@ -793,6 +794,7 @@ async function updateProductiveBookmarks() {
             existing.timeSpent = Math.max(existing.timeSpent, tab.timeSpent);
             existing.lastVisited = new Date().toISOString();
             existing.title = tab.title || existing.title;
+            existing.visitCount = (existing.visitCount || 0) + (tab.visitCount || 1);
           }
         } else {
           // Add new bookmark
@@ -803,18 +805,32 @@ async function updateProductiveBookmarks() {
             domain: tab.domain,
             category: categorizeProductiveSite(tab.domain),
             timeSpent: tab.timeSpent,
+            visitCount: tab.visitCount || 1,
             addedAt: new Date().toISOString(),
             lastVisited: new Date().toISOString(),
-            isCustom: false // Mark as automatically added
+            isCustom: false, // Mark as automatically added
+            isAutoBookmarked: true,
+            favicon: `https://www.google.com/s2/favicons?domain=${tab.domain}&sz=32`
           };
           bookmarkMap.set(tab.domain, newBookmark);
+          newBookmarksAdded++;
         }
       });
       
       const updatedBookmarks = Array.from(bookmarkMap.values());
       chrome.storage.local.set({ productiveBookmarks: updatedBookmarks });
       
-      console.log('Updated productive bookmarks:', updatedBookmarks.length);
+      // Show notification for new auto-bookmarks
+      if (newBookmarksAdded > 0) {
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon48.png',
+          title: 'StudyFlow - New Bookmarks Added!',
+          message: `${newBookmarksAdded} productive site${newBookmarksAdded > 1 ? 's' : ''} automatically bookmarked based on your usage.`
+        });
+      }
+      
+      console.log('Updated productive bookmarks:', updatedBookmarks.length, 'New:', newBookmarksAdded);
     });
   } catch (error) {
     console.error('Error updating productive bookmarks:', error);
@@ -1218,6 +1234,50 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== message.bookmarkId);
         chrome.storage.local.set({ productiveBookmarks: updatedBookmarks });
         sendResponse({ status: 'bookmark removed' });
+      });
+      return true;
+      
+    case 'ADD_CUSTOM_BOOKMARK':
+      chrome.storage.local.get(['productiveBookmarks'], (result) => {
+        const bookmarks = result.productiveBookmarks || [];
+        const newBookmark = {
+          id: Date.now() + Math.random(),
+          title: message.title,
+          url: message.url,
+          domain: new URL(message.url).hostname.replace(/^www\./, ''),
+          category: message.category || 'learning',
+          timeSpent: 0,
+          visitCount: 0,
+          addedAt: new Date().toISOString(),
+          lastVisited: new Date().toISOString(),
+          isCustom: true,
+          isAutoBookmarked: false,
+          favicon: `https://www.google.com/s2/favicons?domain=${new URL(message.url).hostname}&sz=32`
+        };
+        bookmarks.push(newBookmark);
+        chrome.storage.local.set({ productiveBookmarks: bookmarks });
+        sendResponse({ status: 'bookmark added', bookmark: newBookmark });
+      });
+      return true;
+      
+    case 'GET_BOOKMARKS':
+      chrome.storage.local.get(['productiveBookmarks'], (result) => {
+        const bookmarks = result.productiveBookmarks || [];
+        sendResponse({ bookmarks: bookmarks });
+      });
+      return true;
+      
+    case 'UPDATE_BOOKMARK':
+      chrome.storage.local.get(['productiveBookmarks'], (result) => {
+        const bookmarks = result.productiveBookmarks || [];
+        const bookmarkIndex = bookmarks.findIndex(b => b.id === message.bookmarkId);
+        if (bookmarkIndex !== -1) {
+          bookmarks[bookmarkIndex] = { ...bookmarks[bookmarkIndex], ...message.updates };
+          chrome.storage.local.set({ productiveBookmarks: bookmarks });
+          sendResponse({ status: 'bookmark updated' });
+        } else {
+          sendResponse({ status: 'bookmark not found' });
+        }
       });
       return true;
 

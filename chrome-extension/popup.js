@@ -1,279 +1,280 @@
-// popup.js - Enhanced popup functionality with web monitoring integration
+// popup.js - Main popup functionality
 
 // ========== GLOBAL VARIABLES ==========
+let currentPage = 'dashboard';
 let focusTimer = null;
-let focusTimeRemaining = 25 * 60; // 25 minutes in seconds
-let isFocusActive = false;
-let updateInterval = null;
-let pomodoroSettings = {
-  focus: 25,
-  break: 5,
-  longBreak: 15
-};
-
-// Common distracting sites list
-const COMMON_DISTRACTING_SITES = [
-  'facebook.com',
-  'instagram.com',
-  'twitter.com',
-  'x.com',
-  'youtube.com',
-  'tiktok.com',
-  'reddit.com',
-  'netflix.com',
-  'twitch.tv',
-  'discord.com',
-  'snapchat.com',
-  'pinterest.com',
-  'linkedin.com',
-  'whatsapp.com',
-  'telegram.org',
-  'spotify.com',
-  'amazon.com',
-  'ebay.com',
-  'news.ycombinator.com',
-  'buzzfeed.com'
-];
+let focusStartTime = null;
+let focusDuration = 25; // minutes
+let breakDuration = 5; // minutes
+let longBreakDuration = 15; // minutes
 
 // ========== INITIALIZATION ==========
 document.addEventListener('DOMContentLoaded', function() {
   initializePopup();
+  loadUserStats();
+  loadDashboardData();
   setupEventListeners();
-  startAutoUpdate();
+  setupNavigation();
   renderAlerts();
 });
 
-async function initializePopup() {
-  try {
-    await loadDashboardData();
-    await loadUserStats();
-    updateMotivationalQuote();
-    displayCommonSites();
-    loadPomodoroSettings();
-    loadNotes();
-    loadGoals();
-  } catch (error) {
-    console.error('Error initializing popup:', error);
-    showError('Failed to load data');
+function initializePopup() {
+  // Load saved timer settings
+  chrome.storage.local.get(['pomodoroSettings'], (result) => {
+    if (result.pomodoroSettings) {
+      focusDuration = result.pomodoroSettings.pomodoro || 25;
+      breakDuration = result.pomodoroSettings.break || 5;
+      longBreakDuration = result.pomodoroSettings.longBreak || 15;
+      
+      document.getElementById('focusDuration').value = focusDuration;
+      document.getElementById('breakDuration').value = breakDuration;
+      document.getElementById('longBreakDuration').value = longBreakDuration;
+    }
+  });
+}
+
+// ========== EVENT LISTENERS ==========
+function setupEventListeners() {
+  // Analytics page buttons
+  const viewFullAnalyticsBtn = document.getElementById('viewFullAnalyticsBtn');
+  if (viewFullAnalyticsBtn) {
+    viewFullAnalyticsBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
+    });
+  }
+
+  const viewBookmarksBtn = document.getElementById('viewBookmarksBtn');
+  if (viewBookmarksBtn) {
+    viewBookmarksBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('bookmarks.html') });
+    });
+  }
+
+  const refreshDataBtn = document.getElementById('refreshDataBtn');
+  if (refreshDataBtn) {
+    refreshDataBtn.addEventListener('click', refreshAnalyticsData);
+  }
+
+  const resetDailyDataBtn = document.getElementById('resetDailyDataBtn');
+  if (resetDailyDataBtn) {
+    resetDailyDataBtn.addEventListener('click', resetDailyData);
+  }
+
+  // Focus session buttons
+  const startFocusBtn = document.getElementById('startFocusBtn');
+  if (startFocusBtn) {
+    startFocusBtn.addEventListener('click', startFocusSession);
+  }
+
+  const stopFocusBtn = document.getElementById('stopFocusBtn');
+  if (stopFocusBtn) {
+    stopFocusBtn.addEventListener('click', endFocusSession);
+  }
+
+  const openPomodoroBtn = document.getElementById('openPomodoroBtn');
+  if (openPomodoroBtn) {
+    openPomodoroBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('pomodoro.html') });
+    });
+  }
+
+  // Site blocker functionality
+  const addSiteBtn = document.getElementById('addSiteBtn');
+  if (addSiteBtn) {
+    addSiteBtn.addEventListener('click', addBlockedSite);
+  }
+
+  const siteInput = document.getElementById('siteInput');
+  if (siteInput) {
+    siteInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addBlockedSite();
+    });
+  }
+
+  // Goals functionality
+  const addGoalBtn = document.getElementById('addGoalBtn');
+  if (addGoalBtn) {
+    addGoalBtn.addEventListener('click', addGoal);
+  }
+
+  // Notes functionality
+  const saveNoteBtn = document.getElementById('saveNoteBtn');
+  if (saveNoteBtn) {
+    saveNoteBtn.addEventListener('click', saveNote);
+  }
+
+  // Calendar functionality
+  const addReminderBtn = document.getElementById('addReminderBtn');
+  if (addReminderBtn) {
+    addReminderBtn.addEventListener('click', addReminder);
+  }
+
+  // Bookmarks functionality
+  const addCustomBookmarkBtn = document.getElementById('addCustomBookmarkBtn');
+  if (addCustomBookmarkBtn) {
+    addCustomBookmarkBtn.addEventListener('click', addCustomBookmark);
+  }
+
+  const viewDetailedBookmarksBtn = document.getElementById('viewDetailedBookmarksBtn');
+  if (viewDetailedBookmarksBtn) {
+    viewDetailedBookmarksBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('bookmarks.html') });
+    });
+  }
+
+  const refreshBookmarksBtn = document.getElementById('refreshBookmarksBtn');
+  if (refreshBookmarksBtn) {
+    refreshBookmarksBtn.addEventListener('click', refreshBookmarks);
+  }
+
+  const exportBookmarksBtn = document.getElementById('exportBookmarksBtn');
+  if (exportBookmarksBtn) {
+    exportBookmarksBtn.addEventListener('click', exportBookmarks);
+  }
+
+  const importBookmarksBtn = document.getElementById('importBookmarksBtn');
+  if (importBookmarksBtn) {
+    importBookmarksBtn.addEventListener('click', () => {
+      document.getElementById('importFileInput').click();
+    });
+  }
+
+  const importFileInput = document.getElementById('importFileInput');
+  if (importFileInput) {
+    importFileInput.addEventListener('change', (e) => {
+      if (e.target.files[0]) {
+        importBookmarks(e.target.files[0]);
+      }
+    });
   }
 }
 
 // ========== NAVIGATION ==========
-function setupEventListeners() {
+function setupNavigation() {
   // Menu toggle
   const menuToggle = document.getElementById('menuToggle');
   const menuContent = document.getElementById('menuContent');
   
-  menuToggle.addEventListener('click', function() {
-    const isActive = menuContent.classList.contains('active');
-    if (isActive) {
-      menuContent.classList.remove('active');
-      menuToggle.classList.remove('active');
-    } else {
-      menuContent.classList.add('active');
-      menuToggle.classList.add('active');
-    }
-  });
+  if (menuToggle && menuContent) {
+    menuToggle.addEventListener('click', () => {
+      menuContent.classList.toggle('active');
+      menuToggle.classList.toggle('active');
+    });
+  }
 
   // Navigation buttons
-  const navBtns = document.querySelectorAll('.nav-btn');
-  navBtns.forEach(btn => {
-    btn.addEventListener('click', function() {
-      navBtns.forEach(b => b.classList.remove('active'));
-      this.classList.add('active');
-      
-      // Hide all pages
-      const pages = ['dashboardPage', 'analyticsPage', 'focusPage', 'blockerPage', 'goalsPage', 'notesPage', 'calendarPage', 'bookmarksPage'];
-      pages.forEach(pageId => {
-        const page = document.getElementById(pageId);
-        if (page) page.style.display = 'none';
-      });
-      
-      // Show selected page
-      const targetPage = this.dataset.page + 'Page';
-      const page = document.getElementById(targetPage);
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const page = e.target.getAttribute('data-page');
       if (page) {
-        page.style.display = '';
-        
-        // Load page-specific data
-        if (this.dataset.page === 'blocker') {
-          loadBlockedSites();
-        } else if (this.dataset.page === 'analytics') {
-          loadAnalyticsData();
-        } else if (this.dataset.page === 'notes') {
-          loadNotes();
-        } else if (this.dataset.page === 'goals') {
-          loadGoals();
-        } else if (this.dataset.page === 'calendar') {
-          loadReminders();
-        } else if (this.dataset.page === 'bookmarks') {
-          loadBookmarks();
-        }
+        switchPage(page);
       }
     });
   });
+}
 
-  // Site blocker events
-  const addSiteBtn = document.getElementById('addSiteBtn');
-  const siteInput = document.getElementById('siteInput');
+function switchPage(page) {
+  // Update navigation
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
   
-  if (addSiteBtn) addSiteBtn.addEventListener('click', addSite);
-  if (siteInput) {
-    siteInput.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') addSite();
-    });
+  const activeBtn = document.querySelector(`[data-page="${page}"]`);
+  if (activeBtn) {
+    activeBtn.classList.add('active');
   }
 
-  // Focus session events
-  const startFocusBtn = document.getElementById('startFocusBtn');
-  const stopFocusBtn = document.getElementById('stopFocusBtn');
-  
-  if (startFocusBtn) startFocusBtn.addEventListener('click', startFocusSession);
-  if (stopFocusBtn) stopFocusBtn.addEventListener('click', endFocusSession);
-  
-  // Pomodoro timer page button
-  const openPomodoroBtn = document.getElementById('openPomodoroBtn');
-  if (openPomodoroBtn) openPomodoroBtn.addEventListener('click', () => {
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('pomodoro.html'),
-      active: true
-    });
+  // Hide all pages
+  document.querySelectorAll('[id$="Page"]').forEach(pageEl => {
+    pageEl.style.display = 'none';
   });
 
-  // Pomodoro settings events
-  const focusDuration = document.getElementById('focusDuration');
-  const breakDuration = document.getElementById('breakDuration');
-  const longBreakDuration = document.getElementById('longBreakDuration');
-  
-  if (focusDuration) focusDuration.addEventListener('change', savePomodoroSettings);
-  if (breakDuration) breakDuration.addEventListener('change', savePomodoroSettings);
-  if (longBreakDuration) longBreakDuration.addEventListener('change', savePomodoroSettings);
+  // Show selected page
+  const pageElement = document.getElementById(page + 'Page');
+  if (pageElement) {
+    pageElement.style.display = 'block';
+    currentPage = page;
+    
+    // Load page-specific data
+    switch (page) {
+      case 'dashboard':
+        loadDashboardData();
+        break;
+      case 'analytics':
+        loadAnalyticsData();
+        break;
+      case 'blocker':
+        loadBlockedSites();
+        break;
+      case 'goals':
+        loadGoals();
+        break;
+      case 'notes':
+        loadNotes();
+        break;
+      case 'calendar':
+        loadReminders();
+        break;
+      case 'bookmarks':
+        loadBookmarks();
+        break;
+    }
+  }
+}
 
-  // Notes events
-  const saveNoteBtn = document.getElementById('saveNoteBtn');
-  if (saveNoteBtn) saveNoteBtn.addEventListener('click', saveNote);
+// ========== USER STATS ==========
+function loadUserStats() {
+  chrome.runtime.sendMessage({ type: 'GET_STATS' }, (response) => {
+    if (response) {
+      const level = Math.floor(response.xp / 100) + 1;
+      document.getElementById('level').textContent = level;
+      document.getElementById('xp').textContent = response.xp || 0;
+      document.getElementById('streak').textContent = response.streak || 0;
+    }
+  });
+}
 
-  // Goals events
-  const addGoalBtn = document.getElementById('addGoalBtn');
-  if (addGoalBtn) addGoalBtn.addEventListener('click', addGoal);
-
-  // Calendar events
-  const addReminderBtn = document.getElementById('addReminderBtn');
-  if (addReminderBtn) addReminderBtn.addEventListener('click', addReminder);
-
-  // Bookmarks events
-  const refreshBookmarksBtn = document.getElementById('refreshBookmarksBtn');
-  const exportBookmarksBtn = document.getElementById('exportBookmarksBtn');
-  const importBookmarksBtn = document.getElementById('importBookmarksBtn');
-  const importFileInput = document.getElementById('importFileInput');
-  const addCustomBookmarkBtn = document.getElementById('addCustomBookmarkBtn');
-  
-  if (refreshBookmarksBtn) refreshBookmarksBtn.addEventListener('click', refreshBookmarks);
-  if (exportBookmarksBtn) exportBookmarksBtn.addEventListener('click', exportBookmarks);
-  if (importBookmarksBtn) importBookmarksBtn.addEventListener('click', () => importFileInput.click());
-  if (importFileInput) importFileInput.addEventListener('change', importBookmarks);
-  if (addCustomBookmarkBtn) addCustomBookmarkBtn.addEventListener('click', addCustomBookmark);
-
-  // Category filter events
-  document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('category-filter')) {
-      document.querySelectorAll('.category-filter').forEach(btn => btn.classList.remove('active'));
-      e.target.classList.add('active');
-      const category = e.target.getAttribute('data-category');
-      filterBookmarks(category);
+// ========== DASHBOARD ==========
+function loadDashboardData() {
+  // Load current day stats
+  chrome.runtime.sendMessage({ type: 'getCurrentStats' }, (response) => {
+    if (response && response.success) {
+      const stats = response.data;
+      updateDashboardStats(stats);
     }
   });
 
-  // Analytics events
-  const viewFullAnalyticsBtn = document.getElementById('viewFullAnalyticsBtn');
-  const refreshDataBtn = document.getElementById('refreshDataBtn');
+  // Load weekly data for charts
+  chrome.runtime.sendMessage({ type: 'getDailyStats', days: 7 }, (response) => {
+    if (response && response.success) {
+      renderFocusChart(response.data);
+      renderProductivityChart(response.data);
+    }
+  });
+
+  // Load goals preview
+  loadGoalsPreview();
+}
+
+function updateDashboardStats(stats) {
+  const focusScore = stats.focusScore || 0;
+  const totalTime = stats.totalTime || 0;
+  const productiveTime = stats.productiveTime || 0;
   
-  if (viewFullAnalyticsBtn) viewFullAnalyticsBtn.addEventListener('click', openFullAnalytics);
-  if (refreshDataBtn) refreshDataBtn.addEventListener('click', refreshData);
-}
-
-// ========== USER STATS & XP SYSTEM ==========
-async function loadUserStats() {
-  try {
-    const response = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'GET_STATS' }, resolve);
-    });
-
-    const xp = response.xp || 0;
-    const streak = response.streak || 0;
-    const level = Math.floor(xp / 1000) + 1;
-
-    document.getElementById('xp').textContent = xp;
-    document.getElementById('level').textContent = level;
-    document.getElementById('streak').textContent = streak;
-  } catch (error) {
-    console.error('Error loading user stats:', error);
-  }
-}
-
-async function updateXP(amount, reason = 'activity') {
-  try {
-    await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ 
-        type: 'UPDATE_XP', 
-        amount: amount,
-        reason: reason 
-      }, resolve);
-    });
-    
-    await loadUserStats();
-    showMessage(`+${amount} XP earned for ${reason}!`, 'success');
-  } catch (error) {
-    console.error('Error updating XP:', error);
-  }
-}
-
-// ========== DASHBOARD FUNCTIONALITY ==========
-async function loadDashboardData() {
-  try {
-    const [tabData, dailyStats, currentStats, blockedSites] = await Promise.all([
-      getTabData(),
-      getDailyStats(7),
-      getCurrentStats(),
-      getBlockedSites()
-    ]);
-
-    updateDashboardStats(currentStats, tabData, dailyStats);
-    renderFocusChart(dailyStats);
-    renderProductivityChart(dailyStats);
-    loadDashboardGoals();
-    
-  } catch (error) {
-    console.error('Error loading dashboard data:', error);
-    showError('Failed to load dashboard data');
-  }
-}
-
-function updateDashboardStats(currentStats, tabData, dailyStats) {
-  const focusScore = currentStats.focusScore || 0;
-  const totalTime = currentStats.totalTime || 0;
-  const productiveTime = currentStats.productiveTime || 0;
-  const sitesVisited = tabData.length || 0;
-
-  // Update stat values
-  const focusScoreElement = document.getElementById('focusScoreValue');
-  const totalTimeElement = document.getElementById('totalTimeValue');
-  const productiveTimeElement = document.getElementById('productiveTimeValue');
-  const sitesVisitedElement = document.getElementById('sitesVisitedValue');
-
-  if (focusScoreElement) {
-    focusScoreElement.textContent = focusScore + '%';
-    focusScoreElement.className = `stat-value focus-score ${getScoreClass(focusScore)}`;
-  }
+  document.getElementById('focusScoreValue').textContent = focusScore + '%';
+  document.getElementById('totalTimeValue').textContent = formatTime(totalTime);
+  document.getElementById('productiveTimeValue').textContent = formatTime(productiveTime);
   
-  if (totalTimeElement) totalTimeElement.textContent = formatTime(totalTime);
-  if (productiveTimeElement) productiveTimeElement.textContent = formatTime(productiveTime);
-  if (sitesVisitedElement) sitesVisitedElement.textContent = sitesVisited;
-
   // Update progress bar
   const progressBar = document.getElementById('focusProgressBar');
   if (progressBar) {
     progressBar.style.width = focusScore + '%';
+  }
+
+  // Update focus score color
+  const focusScoreElement = document.getElementById('focusScoreValue');
+  if (focusScoreElement) {
+    focusScoreElement.className = 'stat-value focus-score ' + getScoreClass(focusScore);
   }
 }
 
@@ -283,30 +284,18 @@ function renderFocusChart(dailyStats) {
   
   if (!chartContainer || !labelsContainer) return;
 
-  if (dailyStats.length === 0) {
-    chartContainer.innerHTML = '<div class="no-data">No data available yet</div>';
-    labelsContainer.innerHTML = '';
-    return;
-  }
-
-  // Render bars
+  const maxScore = Math.max(...dailyStats.map(d => d.focusScore), 1);
+  
   chartContainer.innerHTML = dailyStats.map(day => {
-    const height = Math.max(4, (day.focusScore / 100) * 76);
+    const height = Math.max(10, (day.focusScore / 100) * 100);
     const scoreClass = getScoreClass(day.focusScore);
     
-    return `
-      <div 
-        class="graph-bar ${scoreClass}" 
-        style="height: ${height}px;" 
-        title="${new Date(day.date).toLocaleDateString()}: ${day.focusScore}% focus score"
-      ></div>
-    `;
+    return `<div class="graph-bar ${scoreClass}" style="height: ${height}%" title="${day.focusScore}% focus score"></div>`;
   }).join('');
 
-  // Render labels
   labelsContainer.innerHTML = dailyStats.map(day => {
     const date = new Date(day.date);
-    return `<span>${date.toLocaleDateString('en-US', { weekday: 'short' })}</span>`;
+    return date.toLocaleDateString('en-US', { weekday: 'short' });
   }).join('');
 }
 
@@ -316,589 +305,417 @@ function renderProductivityChart(dailyStats) {
   
   if (!chartContainer || !labelsContainer) return;
 
-  if (dailyStats.length === 0) {
-    chartContainer.innerHTML = '<div class="no-data">No data available yet</div>';
-    labelsContainer.innerHTML = '';
-    return;
-  }
-
-  // Find max total time for scaling
-  const maxTime = Math.max(...dailyStats.map(day => day.totalTime), 1);
-
-  // Render bars
+  const maxTime = Math.max(...dailyStats.map(d => d.totalTime), 1);
+  
   chartContainer.innerHTML = dailyStats.map(day => {
-    const totalHeight = Math.max(4, (day.totalTime / maxTime) * 96);
+    const totalHeight = Math.max(10, (day.totalTime / maxTime) * 100);
     const productiveHeight = day.totalTime > 0 ? (day.productiveTime / day.totalTime) * totalHeight : 0;
     const distractingHeight = day.totalTime > 0 ? (day.distractingTime / day.totalTime) * totalHeight : 0;
     const neutralHeight = totalHeight - productiveHeight - distractingHeight;
     
     return `
-      <div class="productivity-bar" style="height: ${totalHeight}px;" title="${new Date(day.date).toLocaleDateString()}: ${formatTime(day.totalTime)} total">
-        <div class="productivity-segment neutral" style="height: ${neutralHeight}px;"></div>
-        <div class="productivity-segment distracting" style="height: ${distractingHeight}px;"></div>
-        <div class="productivity-segment productive" style="height: ${productiveHeight}px;"></div>
+      <div class="productivity-bar" style="height: ${totalHeight}%">
+        <div class="productivity-segment productive" style="height: ${productiveHeight}%"></div>
+        <div class="productivity-segment distracting" style="height: ${distractingHeight}%"></div>
+        <div class="productivity-segment neutral" style="height: ${neutralHeight}%"></div>
       </div>
     `;
   }).join('');
 
-  // Render labels
   labelsContainer.innerHTML = dailyStats.map(day => {
     const date = new Date(day.date);
-    return `<span>${date.toLocaleDateString('en-US', { weekday: 'short' })}</span>`;
+    return date.toLocaleDateString('en-US', { weekday: 'short' });
   }).join('');
 }
 
-// ========== WEB ANALYTICS FUNCTIONALITY ==========
-async function loadAnalyticsData() {
-  try {
-    const [tabData, currentStats] = await Promise.all([
-      getTabData(),
-      getCurrentStats()
-    ]);
-
-    renderVisitedSites(tabData);
-    renderCurrentTab(tabData);
+function loadGoalsPreview() {
+  chrome.storage.local.get(['goals'], (result) => {
+    const goals = result.goals || [];
+    const activeGoals = goals.filter(g => !g.completed).slice(0, 3);
     
-  } catch (error) {
-    console.error('Error loading analytics data:', error);
-    showError('Failed to load analytics data');
-  }
+    const container = document.getElementById('dashboardGoals');
+    if (!container) return;
+
+    if (activeGoals.length === 0) {
+      container.innerHTML = '<div class="no-data">No active goals. Create some goals to track your progress!</div>';
+      return;
+    }
+
+    container.innerHTML = activeGoals.map(goal => {
+      const progress = Math.min(100, (goal.progress / goal.target) * 100);
+      return `
+        <div style="background: rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 15px; margin-bottom: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-weight: 600;">${goal.title}</span>
+            <span style="font-size: 0.9em; opacity: 0.8;">${goal.progress}/${goal.target}</span>
+          </div>
+          <div style="background: rgba(255, 255, 255, 0.2); border-radius: 10px; height: 6px; overflow: hidden;">
+            <div style="background: linear-gradient(90deg, #4ade80, #22d3ee); height: 100%; width: ${progress}%; transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  });
 }
 
-function renderVisitedSites(tabData) {
+// ========== ANALYTICS ==========
+function loadAnalyticsData() {
+  chrome.runtime.sendMessage({ type: 'getTabData' }, (response) => {
+    if (response && response.success) {
+      renderVisitedSites(response.data);
+      updateSitesVisitedCount(response.data.length);
+    }
+  });
+
+  // Get current tab info
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0] && tabs[0].url) {
+      renderCurrentTab(tabs[0]);
+    }
+  });
+}
+
+function renderVisitedSites(sites) {
   const container = document.getElementById('visitedSitesList');
   if (!container) return;
 
-  const topSites = tabData
-    .filter(tab => tab.timeSpent > 0)
-    .sort((a, b) => b.timeSpent - a.timeSpent)
-    .slice(0, 10);
-
-  if (topSites.length === 0) {
-    container.innerHTML = '<div class="no-data">No sites visited yet today</div>';
+  if (sites.length === 0) {
+    container.innerHTML = '<div class="no-data">No sites tracked yet today. Start browsing to see analytics!</div>';
     return;
   }
 
-  container.innerHTML = topSites.map(site => `
+  const sortedSites = sites.sort((a, b) => b.timeSpent - a.timeSpent).slice(0, 10);
+  
+  container.innerHTML = sortedSites.map(site => `
     <div class="site-item">
       <div class="site-info">
         <div class="site-dot ${site.category}"></div>
-        <div class="site-name" title="${site.domain} - ${site.title}">
-          <div style="font-weight: 500;">${getSiteName(site)}</div>
-          <div style="font-size: 10px; opacity: 0.7; margin-top: 1px;">${site.domain}</div>
-        </div>
+        <div class="site-name">${site.domain}</div>
       </div>
-      <div class="site-time">
-        <div>${formatTime(site.timeSpent)}</div>
-        <div style="font-size: 9px; opacity: 0.6;">${site.visitCount || 1} visits</div>
-      </div>
+      <div class="site-time">${formatTime(site.timeSpent)}</div>
     </div>
   `).join('');
 }
 
-function renderCurrentTab(tabData) {
+function renderCurrentTab(tab) {
   const container = document.getElementById('currentTabSection');
   if (!container) return;
 
-  const activeTab = tabData.find(tab => tab.isActive);
+  const domain = extractDomain(tab.url);
+  const category = classifySite(domain);
   
-  if (activeTab) {
-    container.innerHTML = `
-      <div class="current-tab">
-        <h3>Currently Active</h3>
-        <div class="tab-info">
-          <div class="tab-icon ${activeTab.category}"></div>
-          <div class="tab-details">
-            <div class="tab-title">${activeTab.title}</div>
-            <div class="tab-domain">${activeTab.domain} • ${formatTime(activeTab.timeSpent)} • ${activeTab.category}</div>
-          </div>
+  container.innerHTML = `
+    <div class="current-tab">
+      <h3>Current Tab</h3>
+      <div class="tab-info">
+        <div class="tab-icon ${category}"></div>
+        <div class="tab-details">
+          <div class="tab-title">${tab.title}</div>
+          <div class="tab-domain">${domain} • ${category}</div>
         </div>
       </div>
-    `;
-  } else {
-    container.innerHTML = '';
-  }
-}
-
-// ========== SITE BLOCKER FUNCTIONALITY ==========
-async function loadBlockedSites() {
-  try {
-    const response = await getBlockedSites();
-    displayBlockedSites(response);
-  } catch (error) {
-    console.error('Error loading blocked sites:', error);
-  }
-}
-
-function displayBlockedSites(sites) {
-  const container = document.getElementById('blockedSitesList');
-  if (!container) return;
-  
-  if (sites.length === 0) {
-    container.innerHTML = '<div class="no-data">No sites blocked yet. Add some distracting sites to get started!</div>';
-    return;
-  }
-  
-  container.innerHTML = sites.map(site => `
-    <div class="site-item-blocker">
-      <span>${site}</span>
-      <button class="remove-btn" data-site="${site}">
-        <i class="fas fa-trash"></i>
-      </button>
     </div>
-  `).join('');
-  
-  // Add event listeners to remove buttons
-  container.querySelectorAll('.remove-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const site = this.getAttribute('data-site');
-      removeSite(site);
-    });
-  });
+  `;
 }
 
-function addSite() {
-  const input = document.getElementById('siteInput');
-  if (!input) return;
-  
-  const site = input.value.trim().toLowerCase();
-  if (!site) return;
-  
-  // Clean up the site URL
-  const cleanSite = site.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
-  
-  chrome.runtime.sendMessage({type: 'GET_BLOCKED_SITES'}, (response) => {
-    const currentSites = response.sites || [];
-    
-    if (currentSites.includes(cleanSite)) {
-      showMessage('This site is already blocked!', 'error');
-      return;
-    }
-    
-    const updatedSites = [...currentSites, cleanSite];
-    chrome.runtime.sendMessage({
-      type: 'UPDATE_BLOCKED_SITES',
-      sites: updatedSites
-    }, () => {
-      input.value = '';
-      loadBlockedSites();
-      showMessage('Site blocked successfully!', 'success');
-    });
-  });
-}
-
-function addCommonSite(site) {
-  chrome.runtime.sendMessage({type: 'GET_BLOCKED_SITES'}, (response) => {
-    const currentSites = response.sites || [];
-    
-    if (currentSites.includes(site)) {
-      showMessage('This site is already blocked!', 'error');
-      return;
-    }
-    
-    const updatedSites = [...currentSites, site];
-    chrome.runtime.sendMessage({
-      type: 'UPDATE_BLOCKED_SITES',
-      sites: updatedSites
-    }, () => {
-      loadBlockedSites();
-      showMessage('Site blocked successfully!', 'success');
-    });
-  });
-}
-
-function removeSite(site) {
-  chrome.runtime.sendMessage({type: 'GET_BLOCKED_SITES'}, (response) => {
-    const currentSites = response.sites || [];
-    const updatedSites = currentSites.filter(s => s !== site);
-    
-    chrome.runtime.sendMessage({
-      type: 'UPDATE_BLOCKED_SITES',
-      sites: updatedSites
-    }, () => {
-      loadBlockedSites();
-      showMessage('Site unblocked successfully!', 'success');
-    });
-  });
-}
-
-function displayCommonSites() {
-  const container = document.getElementById('commonSitesList');
-  if (!container) return;
-  
-  container.innerHTML = COMMON_DISTRACTING_SITES.map(site => `
-    <div class="common-site-item">
-      <span>${site}</span>
-      <button class="add-common-btn" data-site="${site}">
-        <i class="fas fa-plus"></i>
-      </button>
-    </div>
-  `).join('');
-  
-  // Add event listeners to add buttons
-  container.querySelectorAll('.add-common-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const site = this.getAttribute('data-site');
-      addCommonSite(site);
-    });
-  });
-}
-
-// ========== FOCUS SESSION FUNCTIONALITY ==========
-function loadPomodoroSettings() {
-  chrome.storage.local.get(['pomodoroSettings'], (result) => {
-    if (result.pomodoroSettings) {
-      pomodoroSettings = result.pomodoroSettings;
-      document.getElementById('focusDuration').value = pomodoroSettings.focus;
-      document.getElementById('breakDuration').value = pomodoroSettings.break;
-      document.getElementById('longBreakDuration').value = pomodoroSettings.longBreak;
-    }
-    updateTimerDisplay();
-  });
-}
-
-function savePomodoroSettings() {
-  pomodoroSettings = {
-    focus: parseInt(document.getElementById('focusDuration').value) || 25,
-    break: parseInt(document.getElementById('breakDuration').value) || 5,
-    longBreak: parseInt(document.getElementById('longBreakDuration').value) || 15
-  };
-  
-  chrome.storage.local.set({ pomodoroSettings: pomodoroSettings });
-  
-  if (!isFocusActive) {
-    focusTimeRemaining = pomodoroSettings.focus * 60;
-    updateTimerDisplay();
+function updateSitesVisitedCount(count) {
+  const element = document.getElementById('sitesVisitedValue');
+  if (element) {
+    element.textContent = count;
   }
-  
-  showMessage('Pomodoro settings saved!', 'success');
 }
 
-function startFocusSession() {
-  isFocusActive = true;
-  focusTimeRemaining = pomodoroSettings.focus * 60;
-  
-  const startBtn = document.getElementById('startFocusBtn');
-  const stopBtn = document.getElementById('stopFocusBtn');
-  
-  if (startBtn) startBtn.style.display = 'none';
-  if (stopBtn) stopBtn.style.display = 'inline-block';
-  
-  // Start the timer
-  focusTimer = setInterval(() => {
-    focusTimeRemaining--;
-    updateTimerDisplay();
-    
-    if (focusTimeRemaining <= 0) {
-      endFocusSession();
-    }
-  }, 1000);
-  
-  // Get current blocked sites and add additional focus sites
-  chrome.runtime.sendMessage({type: 'GET_BLOCKED_SITES'}, (response) => {
-    const currentSites = response.sites || [];
-    const additionalFocusSites = ['twitter.com', 'instagram.com', 'tiktok.com', 'reddit.com'];
-    
-    // Notify background script with all sites to block during focus
-    chrome.runtime.sendMessage({
-      type: 'START_FOCUS_SESSION',
-      additionalSites: additionalFocusSites,
-      currentSites: currentSites
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.warn('No receiving end for START_FOCUS_SESSION message:', chrome.runtime.lastError);
+function refreshAnalyticsData() {
+  const btn = document.getElementById('refreshDataBtn');
+  if (btn) {
+    btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Refreshing...';
+    btn.disabled = true;
+  }
+
+  chrome.runtime.sendMessage({ type: 'saveData' }, () => {
+    setTimeout(() => {
+      loadAnalyticsData();
+      if (btn) {
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+        btn.disabled = false;
       }
-    });
+    }, 1000);
   });
-  
-  updateTimerDisplay();
-  showMessage('Focus session started! Stay focused!', 'success');
+}
+
+function resetDailyData() {
+  if (confirm('Are you sure you want to reset today\'s data? This action cannot be undone.')) {
+    chrome.runtime.sendMessage({ type: 'forceReset' }, () => {
+      setTimeout(() => {
+        loadDashboardData();
+        loadAnalyticsData();
+      }, 500);
+    });
+  }
+}
+
+// ========== FOCUS SESSION ==========
+function startFocusSession() {
+  const additionalSites = [
+    'youtube.com', 'facebook.com', 'instagram.com', 'twitter.com', 'reddit.com',
+    'tiktok.com', 'snapchat.com', 'discord.com', 'twitch.tv', 'netflix.com'
+  ];
+
+  chrome.runtime.sendMessage({
+    type: 'START_FOCUS_SESSION',
+    additionalSites: additionalSites
+  }, (response) => {
+    if (response && response.status === 'focus session started') {
+      document.getElementById('startFocusBtn').style.display = 'none';
+      document.getElementById('stopFocusBtn').style.display = 'inline-block';
+      
+      focusStartTime = Date.now();
+      startFocusTimer();
+    }
+  });
 }
 
 function endFocusSession() {
-  isFocusActive = false;
-  
+  chrome.runtime.sendMessage({ type: 'END_FOCUS_SESSION' }, (response) => {
+    if (response) {
+      document.getElementById('startFocusBtn').style.display = 'inline-block';
+      document.getElementById('stopFocusBtn').style.display = 'none';
+      
+      stopFocusTimer();
+      
+      if (response.xpEarned) {
+        showNotification(`Focus session completed! Earned ${response.xpEarned} XP!`, 'success');
+        loadUserStats(); // Refresh XP display
+      }
+    }
+  });
+}
+
+function startFocusTimer() {
+  updateTimerDisplay();
+  focusTimer = setInterval(updateTimerDisplay, 1000);
+}
+
+function stopFocusTimer() {
   if (focusTimer) {
     clearInterval(focusTimer);
     focusTimer = null;
   }
-  
-  const startBtn = document.getElementById('startFocusBtn');
-  const stopBtn = document.getElementById('stopFocusBtn');
-  
-  if (startBtn) startBtn.style.display = 'inline-block';
-  if (stopBtn) stopBtn.style.display = 'none';
-  
-  // Calculate session duration and XP
-  const sessionDuration = Math.floor((pomodoroSettings.focus * 60 - focusTimeRemaining) / 60);
-  const xpEarned = Math.min(sessionDuration * 2, pomodoroSettings.focus * 2);
-  
-  // Reset timer display
-  focusTimeRemaining = pomodoroSettings.focus * 60;
-  updateTimerDisplay();
-  
-  // Notify background script
-  chrome.runtime.sendMessage({type: 'END_FOCUS_SESSION'}, async (response) => {
-    if (sessionDuration > 0) {
-      await updateXP(xpEarned, 'focus session');
-      showMessage(`Focus session completed! You earned ${xpEarned} XP!`, 'success');
-      loadDashboardData(); // Refresh stats
-    }
-  });
+  document.getElementById('timerDisplay').textContent = focusDuration + ':00';
 }
 
 function updateTimerDisplay() {
-  const minutes = Math.floor(focusTimeRemaining / 60);
-  const seconds = focusTimeRemaining % 60;
-  const display = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  if (!focusStartTime) return;
   
-  const timerElement = document.getElementById('timerDisplay');
-  if (timerElement) timerElement.textContent = display;
+  const elapsed = Math.floor((Date.now() - focusStartTime) / 1000);
+  const totalSeconds = focusDuration * 60;
+  const remaining = Math.max(0, totalSeconds - elapsed);
+  
+  const minutes = Math.floor(remaining / 60);
+  const seconds = remaining % 60;
+  
+  document.getElementById('timerDisplay').textContent = 
+    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  
+  if (remaining === 0) {
+    endFocusSession();
+  }
 }
 
-// ========== NOTES FUNCTIONALITY ==========
-function saveNote() {
-  const textarea = document.getElementById('noteTextarea');
-  if (!textarea) return;
+// ========== SITE BLOCKER ==========
+function loadBlockedSites() {
+  chrome.storage.local.get(['blockedSites'], (result) => {
+    const sites = result.blockedSites || [];
+    renderBlockedSites(sites);
+  });
   
-  const note = textarea.value.trim();
-  if (!note) return;
+  renderCommonSites();
+}
+
+function renderBlockedSites(sites) {
+  const container = document.getElementById('blockedSitesList');
+  if (!container) return;
+
+  if (sites.length === 0) {
+    container.innerHTML = '<div class="no-data">No sites blocked yet. Add some distracting sites to block!</div>';
+    return;
+  }
+
+  container.innerHTML = sites.map(site => `
+    <div class="site-item-blocker">
+      <span>${site}</span>
+      <button class="remove-btn" onclick="removeBlockedSite('${site}')">
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+function renderCommonSites() {
+  const commonSites = [
+    'youtube.com', 'facebook.com', 'instagram.com', 'twitter.com', 'reddit.com',
+    'tiktok.com', 'snapchat.com', 'discord.com', 'twitch.tv', 'netflix.com',
+    'amazon.com', 'ebay.com', 'pinterest.com', 'buzzfeed.com', '9gag.com'
+  ];
+
+  const container = document.getElementById('commonSitesList');
+  if (!container) return;
+
+  container.innerHTML = commonSites.map(site => `
+    <div class="common-site-item">
+      <span>${site}</span>
+      <button class="add-common-btn" onclick="addCommonSite('${site}')">
+        <i class="fas fa-plus"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+function addBlockedSite() {
+  const input = document.getElementById('siteInput');
+  const site = input.value.trim();
   
-  const noteData = {
-    id: Date.now(),
-    content: note,
-    timestamp: new Date().toISOString(),
-    date: new Date().toLocaleDateString()
-  };
+  if (!site) return;
   
-  chrome.storage.local.get(['notes'], (result) => {
-    const notes = result.notes || [];
-    notes.unshift(noteData); // Add to beginning
-    
-    chrome.storage.local.set({ notes: notes }, () => {
-      textarea.value = '';
-      loadNotes();
-      showMessage('Note saved successfully!', 'success');
-      updateXP(5, 'taking notes');
-    });
+  chrome.storage.local.get(['blockedSites'], (result) => {
+    const sites = result.blockedSites || [];
+    if (!sites.includes(site)) {
+      sites.push(site);
+      chrome.storage.local.set({ blockedSites: sites });
+      chrome.runtime.sendMessage({ type: 'UPDATE_BLOCKED_SITES', sites: sites });
+      renderBlockedSites(sites);
+      input.value = '';
+    }
   });
 }
 
-function loadNotes() {
-  chrome.storage.local.get(['notes'], (result) => {
-    const notes = result.notes || [];
-    const container = document.getElementById('notesList');
-    
-    if (!container) return;
-    
-    if (notes.length === 0) {
-      container.innerHTML = '<div class="no-data">No notes yet. Start taking notes to track your learning!</div>';
-      return;
+function removeBlockedSite(site) {
+  chrome.storage.local.get(['blockedSites'], (result) => {
+    const sites = result.blockedSites || [];
+    const updatedSites = sites.filter(s => s !== site);
+    chrome.storage.local.set({ blockedSites: updatedSites });
+    chrome.runtime.sendMessage({ type: 'UPDATE_BLOCKED_SITES', sites: updatedSites });
+    renderBlockedSites(updatedSites);
+  });
+}
+
+function addCommonSite(site) {
+  chrome.storage.local.get(['blockedSites'], (result) => {
+    const sites = result.blockedSites || [];
+    if (!sites.includes(site)) {
+      sites.push(site);
+      chrome.storage.local.set({ blockedSites: sites });
+      chrome.runtime.sendMessage({ type: 'UPDATE_BLOCKED_SITES', sites: sites });
+      renderBlockedSites(sites);
     }
-    
-    container.innerHTML = notes.map(note => `
-      <div class="note-item">
-        <div class="note-header">
-          <span class="note-date">${note.date}</span>
-          <button class="remove-btn delete-note-btn" data-id="${note.id}">
-            <i class="fas fa-trash"></i>
+  });
+}
+
+// ========== GOALS ==========
+function loadGoals() {
+  chrome.storage.local.get(['goals'], (result) => {
+    const goals = result.goals || [];
+    renderGoals(goals);
+  });
+}
+
+function renderGoals(goals) {
+  const container = document.getElementById('goalsList');
+  if (!container) return;
+
+  if (goals.length === 0) {
+    container.innerHTML = '<div class="no-data">No goals set yet. Create your first goal above!</div>';
+    return;
+  }
+
+  container.innerHTML = goals.map(goal => {
+    const progress = Math.min(100, (goal.progress / goal.target) * 100);
+    return `
+      <div class="goal-item">
+        <div class="goal-header">
+          <div class="goal-title">${goal.title}</div>
+          <div class="goal-category">${goal.category}</div>
+        </div>
+        <div class="goal-progress">
+          <div class="goal-progress-bar">
+            <div class="goal-progress-fill" style="width: ${progress}%"></div>
+          </div>
+          <div class="goal-progress-text">${goal.progress}/${goal.target} ${goal.description || ''}</div>
+        </div>
+        <div class="goal-actions">
+          <button class="btn goal-btn" onclick="updateGoalProgress('${goal.id}', 1)">
+            <i class="fas fa-plus"></i> +1
+          </button>
+          <button class="btn goal-btn complete" onclick="completeGoal('${goal.id}')">
+            <i class="fas fa-check"></i> Complete
+          </button>
+          <button class="btn goal-btn delete" onclick="deleteGoal('${goal.id}')">
+            <i class="fas fa-trash"></i> Delete
           </button>
         </div>
-        <div class="note-content">${note.content}</div>
       </div>
-    `).join('');
-    // Attach delete listeners
-    container.querySelectorAll('.delete-note-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const id = parseInt(this.getAttribute('data-id'));
-        deleteNote(id);
-      });
-    });
-  });
+    `;
+  }).join('');
 }
 
-function deleteNote(noteId) {
-  chrome.storage.local.get(['notes'], (result) => {
-    const notes = result.notes || [];
-    const updatedNotes = notes.filter(note => note.id !== noteId);
-    
-    chrome.storage.local.set({ notes: updatedNotes }, () => {
-      loadNotes();
-      showMessage('Note deleted!', 'success');
-    });
-  });
-}
-
-// ========== GOALS FUNCTIONALITY ==========
 function addGoal() {
   const title = document.getElementById('goalTitle').value.trim();
   const description = document.getElementById('goalDescription').value.trim();
   const category = document.getElementById('goalCategory').value;
-  const target = parseInt(document.getElementById('goalTarget').value) || 1;
-  
-  if (!title) {
-    showMessage('Please enter a goal title!', 'error');
+  const target = parseInt(document.getElementById('goalTarget').value);
+
+  if (!title || !target || target <= 0) {
+    showNotification('Please enter a valid title and target', 'error');
     return;
   }
-  
-  const goalData = {
-    id: Date.now(),
+
+  const goal = {
+    id: Date.now().toString(),
     title: title,
     description: description,
     category: category,
     target: target,
     progress: 0,
     completed: false,
-    createdAt: new Date().toISOString(),
-    completedAt: null
+    createdAt: new Date().toISOString()
   };
-  
-  chrome.storage.local.get(['goals'], (result) => {
-    const goals = result.goals || [];
-    goals.unshift(goalData);
-    
-    chrome.storage.local.set({ goals: goals }, () => {
-      // Clear form
-      document.getElementById('goalTitle').value = '';
-      document.getElementById('goalDescription').value = '';
-      document.getElementById('goalTarget').value = '';
-      
-      loadGoals();
-      loadDashboardGoals();
-      showMessage('Goal added successfully!', 'success');
-      updateXP(10, 'setting goals');
-    });
-  });
-}
 
-function loadGoals() {
   chrome.storage.local.get(['goals'], (result) => {
     const goals = result.goals || [];
-    const container = document.getElementById('goalsList');
+    goals.push(goal);
+    chrome.storage.local.set({ goals: goals });
+    renderGoals(goals);
     
-    if (!container) return;
+    // Clear form
+    document.getElementById('goalTitle').value = '';
+    document.getElementById('goalDescription').value = '';
+    document.getElementById('goalTarget').value = '';
     
-    if (goals.length === 0) {
-      container.innerHTML = '<div class="no-data">No goals yet. Set your first goal to start tracking progress!</div>';
-      return;
-    }
-    
-    container.innerHTML = goals.map(goal => {
-      const progressPercent = Math.min((goal.progress / goal.target) * 100, 100);
-      const isCompleted = goal.completed || goal.progress >= goal.target;
-      
-      return `
-        <div class="goal-item ${isCompleted ? 'completed' : ''}">
-          <div class="goal-header">
-            <div class="goal-title">${goal.title}</div>
-            <div class="goal-category">${goal.category}</div>
-          </div>
-          ${goal.description ? `<div style="font-size: 0.9em; opacity: 0.8; margin-bottom: 10px;">${goal.description}</div>` : ''}
-          <div class="goal-progress">
-            <div class="goal-progress-bar">
-              <div class="goal-progress-fill" style="width: ${progressPercent}%;"></div>
-            </div>
-            <div class="goal-progress-text">${goal.progress} / ${goal.target} ${goal.category === 'study' ? 'hours' : 'units'}</div>
-          </div>
-          <div class="goal-actions">
-            ${!isCompleted ? `
-              <button class="goal-btn update-goal-progress" data-id="${goal.id}">
-                <i class="fas fa-plus"></i> +1
-              </button>
-              <button class="goal-btn complete-goal" data-id="${goal.id}">
-                <i class="fas fa-check"></i> Complete
-              </button>
-            ` : `
-              <span style="color: #4ade80; font-weight: 600;">
-                <i class="fas fa-check-circle"></i> Completed!
-              </span>
-            `}
-            <button class="goal-btn delete-goal" data-id="${goal.id}">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-    // Attach listeners for goal actions
-    container.querySelectorAll('.delete-goal').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const id = parseInt(this.getAttribute('data-id'));
-        deleteGoal(id);
-      });
-    });
-    container.querySelectorAll('.update-goal-progress').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const id = parseInt(this.getAttribute('data-id'));
-        updateGoalProgress(id, 1);
-      });
-    });
-    container.querySelectorAll('.complete-goal').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const id = parseInt(this.getAttribute('data-id'));
-        completeGoal(id);
-      });
-    });
-  });
-}
-
-function loadDashboardGoals() {
-  chrome.storage.local.get(['goals'], (result) => {
-    const goals = result.goals || [];
-    const container = document.getElementById('dashboardGoals');
-    
-    if (!container) return;
-    
-    const activeGoals = goals.filter(goal => !goal.completed && goal.progress < goal.target).slice(0, 3);
-    
-    if (activeGoals.length === 0) {
-      container.innerHTML = '<div class="no-data">No active goals. <a href="#" class="switch-to-goals" style="color: #4ade80;">Add your first goal!</a></div>';
-      return;
-    }
-    
-    container.innerHTML = activeGoals.map(goal => {
-      const progressPercent = Math.min((goal.progress / goal.target) * 100, 100);
-      
-      return `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255.255.255, 0.1);">
-          <div style="flex: 1;">
-            <div style="font-weight: 500; margin-bottom: 5px;">${goal.title}</div>
-            <div class="goal-progress-bar" style="height: 6px;">
-              <div class="goal-progress-fill" style="width: ${progressPercent}%; height: 100%;"></div>
-            </div>
-          </div>
-          <div style="margin-left: 15px; text-align: right; font-size: 0.9em;">
-            <div style="font-weight: 600;">${goal.progress}/${goal.target}</div>
-            <div style="opacity: 0.7;">${Math.round(progressPercent)}%</div>
-          </div>
-        </div>
-      `;
-    }).join('');
+    showNotification('Goal added successfully!', 'success');
   });
 }
 
 function updateGoalProgress(goalId, increment) {
   chrome.storage.local.get(['goals'], (result) => {
     const goals = result.goals || [];
-    const goalIndex = goals.findIndex(goal => goal.id === goalId);
+    const goalIndex = goals.findIndex(g => g.id === goalId);
     
     if (goalIndex !== -1) {
       goals[goalIndex].progress += increment;
+      goals[goalIndex].progress = Math.max(0, goals[goalIndex].progress);
       
-      // Check if goal is completed
-      if (goals[goalIndex].progress >= goals[goalIndex].target && !goals[goalIndex].completed) {
+      if (goals[goalIndex].progress >= goals[goalIndex].target) {
         goals[goalIndex].completed = true;
         goals[goalIndex].completedAt = new Date().toISOString();
-        updateXP(50, 'completing goals');
-        showMessage('🎉 Goal completed! You earned 50 XP!', 'success');
-      } else {
-        updateXP(5, 'goal progress');
+        
+        // Award XP
+        chrome.runtime.sendMessage({ type: 'UPDATE_XP', amount: 25 });
+        showNotification('Goal completed! Earned 25 XP!', 'success');
+        loadUserStats();
       }
       
-      chrome.storage.local.set({ goals: goals }, () => {
-        loadGoals();
-        loadDashboardGoals();
-      });
+      chrome.storage.local.set({ goals: goals });
+      renderGoals(goals);
     }
   });
 }
@@ -906,19 +723,20 @@ function updateGoalProgress(goalId, increment) {
 function completeGoal(goalId) {
   chrome.storage.local.get(['goals'], (result) => {
     const goals = result.goals || [];
-    const goalIndex = goals.findIndex(goal => goal.id === goalId);
+    const goalIndex = goals.findIndex(g => g.id === goalId);
     
     if (goalIndex !== -1) {
       goals[goalIndex].completed = true;
       goals[goalIndex].completedAt = new Date().toISOString();
       goals[goalIndex].progress = goals[goalIndex].target;
       
-      chrome.storage.local.set({ goals: goals }, () => {
-        loadGoals();
-        loadDashboardGoals();
-        updateXP(50, 'completing goals');
-        showMessage('🎉 Goal completed! You earned 50 XP!', 'success');
-      });
+      chrome.storage.local.set({ goals: goals });
+      renderGoals(goals);
+      
+      // Award XP
+      chrome.runtime.sendMessage({ type: 'UPDATE_XP', amount: 25 });
+      showNotification('Goal completed! Earned 25 XP!', 'success');
+      loadUserStats();
     }
   });
 }
@@ -927,173 +745,196 @@ function deleteGoal(goalId) {
   if (confirm('Are you sure you want to delete this goal?')) {
     chrome.storage.local.get(['goals'], (result) => {
       const goals = result.goals || [];
-      const updatedGoals = goals.filter(goal => goal.id !== goalId);
-      
-      chrome.storage.local.set({ goals: updatedGoals }, () => {
-        loadGoals();
-        loadDashboardGoals();
-        showMessage('Goal deleted!', 'success');
-      });
+      const updatedGoals = goals.filter(g => g.id !== goalId);
+      chrome.storage.local.set({ goals: updatedGoals });
+      renderGoals(updatedGoals);
+      showNotification('Goal deleted', 'success');
     });
   }
 }
 
-function switchToGoals() {
-  // Switch to goals page
-  document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-  document.querySelector('[data-page="goals"]').classList.add('active');
-  
-  document.querySelectorAll('[id$="Page"]').forEach(page => page.style.display = 'none');
-  document.getElementById('goalsPage').style.display = '';
-  
-  loadGoals();
+// ========== NOTES ==========
+function loadNotes() {
+  chrome.storage.local.get(['notes'], (result) => {
+    const notes = result.notes || [];
+    renderNotes(notes);
+  });
 }
 
-// ========== CALENDAR & REMINDERS FUNCTIONALITY ==========
+function renderNotes(notes) {
+  const container = document.getElementById('notesList');
+  if (!container) return;
+
+  if (notes.length === 0) {
+    container.innerHTML = '<div class="no-data">No notes yet. Write your first note above!</div>';
+    return;
+  }
+
+  const sortedNotes = notes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  
+  container.innerHTML = sortedNotes.map(note => `
+    <div class="note-item">
+      <div class="note-header">
+        <span class="note-date">${new Date(note.createdAt).toLocaleDateString()}</span>
+        <button class="btn btn-small btn-danger" onclick="deleteNote('${note.id}')">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+      <div class="note-content">${note.content}</div>
+    </div>
+  `).join('');
+}
+
+function saveNote() {
+  const content = document.getElementById('noteTextarea').value.trim();
+  
+  if (!content) {
+    showNotification('Please enter some content', 'error');
+    return;
+  }
+
+  const note = {
+    id: Date.now().toString(),
+    content: content,
+    createdAt: new Date().toISOString()
+  };
+
+  chrome.storage.local.get(['notes'], (result) => {
+    const notes = result.notes || [];
+    notes.push(note);
+    chrome.storage.local.set({ notes: notes });
+    renderNotes(notes);
+    
+    document.getElementById('noteTextarea').value = '';
+    showNotification('Note saved!', 'success');
+  });
+}
+
+function deleteNote(noteId) {
+  if (confirm('Are you sure you want to delete this note?')) {
+    chrome.storage.local.get(['notes'], (result) => {
+      const notes = result.notes || [];
+      const updatedNotes = notes.filter(n => n.id !== noteId);
+      chrome.storage.local.set({ notes: updatedNotes });
+      renderNotes(updatedNotes);
+      showNotification('Note deleted', 'success');
+    });
+  }
+}
+
+// ========== CALENDAR/REMINDERS ==========
+function loadReminders() {
+  chrome.storage.local.get(['reminders'], (result) => {
+    const reminders = result.reminders || [];
+    renderReminders(reminders);
+  });
+}
+
+function renderReminders(reminders) {
+  const container = document.getElementById('remindersList');
+  if (!container) return;
+
+  if (reminders.length === 0) {
+    container.innerHTML = '<div class="no-data">No reminders set. Create your first reminder above!</div>';
+    return;
+  }
+
+  const sortedReminders = reminders.sort((a, b) => new Date(a.reminderDateTime) - new Date(b.reminderDateTime));
+  
+  container.innerHTML = sortedReminders.map(reminder => {
+    const reminderTime = new Date(reminder.reminderDateTime);
+    const now = new Date();
+    const isOverdue = reminderTime < now && !reminder.completed;
+    const isUpcoming = reminderTime > now && reminderTime < new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    
+    return `
+      <div class="reminder-item ${isOverdue ? 'overdue' : isUpcoming ? 'upcoming' : ''}">
+        <div class="reminder-header">
+          <div class="reminder-title">${reminder.title}</div>
+          <div class="reminder-category">${reminder.category}</div>
+        </div>
+        <div class="reminder-datetime">
+          ${reminderTime.toLocaleDateString()} at ${reminderTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+        </div>
+        ${reminder.description ? `<div class="reminder-description">${reminder.description}</div>` : ''}
+        <div class="reminder-actions">
+          <button class="btn reminder-btn complete" onclick="completeReminder('${reminder.id}')">
+            <i class="fas fa-check"></i> Complete
+          </button>
+          <button class="btn reminder-btn delete" onclick="deleteReminder('${reminder.id}')">
+            <i class="fas fa-trash"></i> Delete
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function addReminder() {
   const title = document.getElementById('reminderTitle').value.trim();
   const description = document.getElementById('reminderDescription').value.trim();
   const date = document.getElementById('reminderDate').value;
   const time = document.getElementById('reminderTime').value;
   const category = document.getElementById('reminderCategory').value;
-  
+
   if (!title || !date || !time) {
-    showMessage('Please fill in title, date, and time!', 'error');
+    showNotification('Please fill in all required fields', 'error');
     return;
   }
-  
-  // Check if date/time is in the future
+
   const reminderDateTime = new Date(`${date}T${time}`);
+  
   if (reminderDateTime <= new Date()) {
-    showMessage('Please select a future date and time!', 'error');
+    showNotification('Please select a future date and time', 'error');
     return;
   }
-  
-  const reminderData = {
-    id: Date.now(),
+
+  const reminder = {
+    id: Date.now().toString(),
     title: title,
     description: description,
-    date: date,
-    time: time,
+    reminderDateTime: reminderDateTime.toISOString(),
     category: category,
     completed: false,
-    createdAt: new Date().toISOString(),
-    reminderDateTime: reminderDateTime.toISOString()
+    notified: false,
+    createdAt: new Date().toISOString()
   };
-  
-  chrome.storage.local.get(['reminders'], (result) => {
-    const reminders = result.reminders || [];
-    reminders.push(reminderData);
-    
-    // Sort reminders by date/time
-    reminders.sort((a, b) => new Date(a.reminderDateTime) - new Date(b.reminderDateTime));
-    
-    chrome.storage.local.set({ reminders: reminders }, () => {
-      // Clear form
-      document.getElementById('reminderTitle').value = '';
-      document.getElementById('reminderDescription').value = '';
-      document.getElementById('reminderDate').value = '';
-      document.getElementById('reminderTime').value = '';
-      
-      loadReminders();
-      showMessage('Reminder added successfully!', 'success');
-      updateXP(5, 'setting reminders');
-      
-      // Set up alarm for this reminder
-      chrome.runtime.sendMessage({
-        type: 'SET_REMINDER_ALARM',
-        reminder: reminderData
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.warn('No receiving end for SET_REMINDER_ALARM message:', chrome.runtime.lastError);
-        }
-      });
-    });
-  });
-}
 
-function loadReminders() {
   chrome.storage.local.get(['reminders'], (result) => {
     const reminders = result.reminders || [];
-    const container = document.getElementById('remindersList');
+    reminders.push(reminder);
+    chrome.storage.local.set({ reminders: reminders });
+    renderReminders(reminders);
     
-    if (!container) return;
+    // Set alarm for reminder
+    chrome.runtime.sendMessage({ type: 'SET_REMINDER_ALARM', reminder: reminder });
     
-    if (reminders.length === 0) {
-      container.innerHTML = '<div class="no-data">No reminders set. Add your first reminder to stay organized!</div>';
-      return;
-    }
+    // Clear form
+    document.getElementById('reminderTitle').value = '';
+    document.getElementById('reminderDescription').value = '';
+    document.getElementById('reminderDate').value = '';
+    document.getElementById('reminderTime').value = '';
     
-    const now = new Date();
-    
-    container.innerHTML = reminders.map(reminder => {
-      const reminderDate = new Date(reminder.reminderDateTime);
-      const isOverdue = reminderDate < now && !reminder.completed;
-      const isUpcoming = reminderDate > now && (reminderDate - now) < 24 * 60 * 60 * 1000; // Within 24 hours
-      
-      let statusClass = '';
-      if (reminder.completed) statusClass = 'completed';
-      else if (isOverdue) statusClass = 'overdue';
-      else if (isUpcoming) statusClass = 'upcoming';
-      
-      return `
-        <div class="reminder-item ${statusClass}">
-          <div class="reminder-header">
-            <div class="reminder-title">${reminder.title}</div>
-            <div class="reminder-category">${reminder.category}</div>
-          </div>
-          <div class="reminder-datetime">
-            📅 ${new Date(reminder.date).toLocaleDateString()} at ${reminder.time}
-            ${isOverdue ? ' (Overdue)' : isUpcoming ? ' (Soon)' : ''}
-          </div>
-          ${reminder.description ? `<div class="reminder-description">${reminder.description}</div>` : ''}
-          <div class="reminder-actions">
-            ${!reminder.completed ? `
-              <button class="reminder-btn complete-reminder" data-id="${reminder.id}">
-                <i class="fas fa-check"></i> Complete
-              </button>
-            ` : `
-              <span style="color: #4ade80; font-weight: 600;">
-                <i class="fas fa-check-circle"></i> Completed
-              </span>
-            `}
-            <button class="reminder-btn delete-reminder" data-id="${reminder.id}">
-              <i class="fas fa-trash"></i> Delete
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
-    // Attach listeners for reminder actions
-    container.querySelectorAll('.delete-reminder').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const id = parseInt(this.getAttribute('data-id'));
-        deleteReminder(id);
-      });
-    });
-    container.querySelectorAll('.complete-reminder').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const id = parseInt(this.getAttribute('data-id'));
-        completeReminder(id);
-      });
-    });
+    showNotification('Reminder added successfully!', 'success');
   });
 }
 
 function completeReminder(reminderId) {
   chrome.storage.local.get(['reminders'], (result) => {
     const reminders = result.reminders || [];
-    const reminderIndex = reminders.findIndex(reminder => reminder.id === reminderId);
+    const reminderIndex = reminders.findIndex(r => r.id === reminderId);
     
     if (reminderIndex !== -1) {
       reminders[reminderIndex].completed = true;
       reminders[reminderIndex].completedAt = new Date().toISOString();
       
-      chrome.storage.local.set({ reminders: reminders }, () => {
-        loadReminders();
-        updateXP(10, 'completing reminders');
-        showMessage('Reminder completed! You earned 10 XP!', 'success');
-      });
+      chrome.storage.local.set({ reminders: reminders });
+      renderReminders(reminders);
+      
+      // Award XP
+      chrome.runtime.sendMessage({ type: 'UPDATE_XP', amount: 10 });
+      showNotification('Reminder completed! Earned 10 XP!', 'success');
+      loadUserStats();
     }
   });
 }
@@ -1102,307 +943,290 @@ function deleteReminder(reminderId) {
   if (confirm('Are you sure you want to delete this reminder?')) {
     chrome.storage.local.get(['reminders'], (result) => {
       const reminders = result.reminders || [];
-      const updatedReminders = reminders.filter(reminder => reminder.id !== reminderId);
-      
-      chrome.storage.local.set({ reminders: updatedReminders }, () => {
-        loadReminders();
-        showMessage('Reminder deleted!', 'success');
-      });
+      const updatedReminders = reminders.filter(r => r.id !== reminderId);
+      chrome.storage.local.set({ reminders: updatedReminders });
+      renderReminders(updatedReminders);
+      showNotification('Reminder deleted', 'success');
     });
   }
 }
 
-// ========== BOOKMARKS FUNCTIONALITY ==========
+// ========== BOOKMARKS ==========
+function loadBookmarks() {
+  chrome.runtime.sendMessage({ type: 'GET_BOOKMARKS' }, (response) => {
+    if (response && response.bookmarks) {
+      renderBookmarks(response.bookmarks);
+      updateBookmarkStats(response.bookmarks);
+    }
+  });
+}
+
+function renderBookmarks(bookmarks) {
+  const container = document.getElementById('bookmarksList');
+  if (!container) return;
+
+  if (bookmarks.length === 0) {
+    container.innerHTML = '<div class="no-data">No bookmarks yet. Browse productive sites for 30+ minutes to auto-bookmark them!</div>';
+    return;
+  }
+
+  // Sort by time spent and show top 5
+  const topBookmarks = bookmarks
+    .sort((a, b) => (b.timeSpent || 0) - (a.timeSpent || 0))
+    .slice(0, 5);
+
+  container.innerHTML = topBookmarks.map(bookmark => `
+    <div class="bookmark-item">
+      <div class="bookmark-info">
+        <div class="bookmark-favicon">
+          <img src="${bookmark.favicon}" alt="" onerror="this.style.display='none'; this.parentNode.innerHTML='🔖';">
+        </div>
+        <div class="bookmark-details">
+          <div class="bookmark-title">${bookmark.title}</div>
+          <div class="bookmark-url">${bookmark.domain}</div>
+        </div>
+      </div>
+      <div class="bookmark-meta">
+        <div class="bookmark-time">${formatTime(bookmark.timeSpent || 0)}</div>
+        <div class="bookmark-category">${bookmark.category}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateBookmarkStats(bookmarks) {
+  const totalBookmarks = document.getElementById('totalBookmarks');
+  const newBookmarks = document.getElementById('newBookmarks');
+  
+  if (totalBookmarks) {
+    totalBookmarks.textContent = bookmarks.length;
+  }
+  
+  if (newBookmarks) {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recentBookmarks = bookmarks.filter(b => new Date(b.addedAt) > weekAgo);
+    newBookmarks.textContent = recentBookmarks.length;
+  }
+}
+
 function addCustomBookmark() {
   const title = document.getElementById('customBookmarkTitle').value.trim();
   const url = document.getElementById('customBookmarkUrl').value.trim();
   const category = document.getElementById('customBookmarkCategory').value;
-  
+
   if (!title || !url) {
-    showMessage('Please fill in both title and URL!', 'error');
+    showNotification('Please enter both title and URL', 'error');
     return;
   }
-  
-  // Validate URL
-  try {
-    new URL(url);
-  } catch (e) {
-    showMessage('Please enter a valid URL!', 'error');
+
+  if (!isValidUrl(url)) {
+    showNotification('Please enter a valid URL', 'error');
     return;
   }
-  
-  const domain = new URL(url).hostname.replace(/^www\./, '');
-  
-  chrome.storage.local.get(['productiveBookmarks'], (result) => {
-    const bookmarks = result.productiveBookmarks || [];
-    
-    // Check for duplicates
-    if (bookmarks.some(bookmark => bookmark.domain === domain)) {
-      showMessage('This site is already bookmarked!', 'error');
-      return;
-    }
-    
-    const newBookmark = {
-      id: Date.now() + Math.random(),
-      title: title,
-      url: url,
-      domain: domain,
-      category: category,
-      timeSpent: 0,
-      addedAt: new Date().toISOString(),
-      lastVisited: new Date().toISOString(),
-      isCustom: true
-    };
-    
-    bookmarks.push(newBookmark);
-    
-    chrome.storage.local.set({ productiveBookmarks: bookmarks }, () => {
+
+  chrome.runtime.sendMessage({
+    type: 'ADD_CUSTOM_BOOKMARK',
+    title: title,
+    url: url,
+    category: category
+  }, (response) => {
+    if (response && response.status === 'bookmark added') {
+      loadBookmarks();
+      
       // Clear form
       document.getElementById('customBookmarkTitle').value = '';
       document.getElementById('customBookmarkUrl').value = '';
       document.getElementById('customBookmarkCategory').value = 'learning';
       
-      loadBookmarks();
-      updateXP(5, 'adding bookmarks');
-      showMessage('Bookmark added successfully!', 'success');
-    });
-  });
-}
-
-function loadBookmarks() {
-  chrome.storage.local.get(['productiveBookmarks'], (result) => {
-    const bookmarks = result.productiveBookmarks || [];
-    const container = document.getElementById('bookmarksList');
-    const totalBookmarksEl = document.getElementById('totalBookmarks');
-    const newBookmarksEl = document.getElementById('newBookmarks');
-    
-    if (!container) return;
-    
-    // Update stats
-    if (totalBookmarksEl) totalBookmarksEl.textContent = bookmarks.length;
-    
-    // Calculate new bookmarks this week
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    const newThisWeek = bookmarks.filter(bookmark => 
-      new Date(bookmark.addedAt) > oneWeekAgo
-    ).length;
-    if (newBookmarksEl) newBookmarksEl.textContent = newThisWeek;
-    
-    if (bookmarks.length === 0) {
-      container.innerHTML = '<div class="no-data">No productive bookmarks yet. Keep using productive sites to build your bookmark collection!</div>';
-      return;
+      showNotification('Bookmark added successfully!', 'success');
+    } else {
+      showNotification('Failed to add bookmark', 'error');
     }
-    
-    displayBookmarks(bookmarks);
   });
 }
 
-function importBookmarks(event) {
-  const file = event.target.files[0];
+function refreshBookmarks() {
+  const btn = document.getElementById('refreshBookmarksBtn');
+  if (btn) {
+    btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Refreshing...';
+    btn.disabled = true;
+  }
+
+  chrome.runtime.sendMessage({ type: 'UPDATE_BOOKMARKS' }, () => {
+    setTimeout(() => {
+      loadBookmarks();
+      if (btn) {
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh Bookmarks';
+        btn.disabled = false;
+      }
+      showNotification('Bookmarks refreshed!', 'success');
+    }, 1000);
+  });
+}
+
+function exportBookmarks() {
+  chrome.runtime.sendMessage({ type: 'GET_BOOKMARKS' }, (response) => {
+    if (response && response.bookmarks) {
+      const exportData = {
+        bookmarks: response.bookmarks,
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `studyflow-bookmarks-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showNotification('Bookmarks exported successfully!', 'success');
+    }
+  });
+}
+
+function importBookmarks(file) {
   if (!file) return;
-  
+
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const importData = JSON.parse(e.target.result);
+      const data = JSON.parse(e.target.result);
       
-      if (!importData.bookmarks || !Array.isArray(importData.bookmarks)) {
-        showMessage('Invalid bookmark file format!', 'error');
-        return;
+      if (!data.bookmarks || !Array.isArray(data.bookmarks)) {
+        throw new Error('Invalid bookmark file format');
       }
-      
-      chrome.storage.local.get(['productiveBookmarks'], (result) => {
-        const existingBookmarks = result.productiveBookmarks || [];
-        const existingDomains = new Set(existingBookmarks.map(b => b.domain));
-        
-        const newBookmarks = importData.bookmarks.filter(bookmark => {
-          return bookmark.domain && !existingDomains.has(bookmark.domain);
-        }).map(bookmark => ({
-          ...bookmark,
-          id: Date.now() + Math.random(),
-          isCustom: true,
-          addedAt: new Date().toISOString()
-        }));
-        
-        if (newBookmarks.length === 0) {
-          showMessage('No new bookmarks to import!', 'error');
-          return;
-        }
-        
-        const allBookmarks = [...existingBookmarks, ...newBookmarks];
-        
-        chrome.storage.local.set({ productiveBookmarks: allBookmarks }, () => {
-          loadBookmarks();
-          updateXP(newBookmarks.length * 2, 'importing bookmarks');
-          showMessage(`Imported ${newBookmarks.length} new bookmarks!`, 'success');
+
+      // Import bookmarks one by one
+      let importedCount = 0;
+      const importPromises = data.bookmarks.map(bookmark => {
+        return new Promise((resolve) => {
+          chrome.runtime.sendMessage({
+            type: 'ADD_CUSTOM_BOOKMARK',
+            title: bookmark.title,
+            url: bookmark.url,
+            category: bookmark.category || 'learning'
+          }, (response) => {
+            if (response && response.status === 'bookmark added') {
+              importedCount++;
+            }
+            resolve();
+          });
         });
+      });
+
+      Promise.all(importPromises).then(() => {
+        loadBookmarks();
+        showNotification(`Imported ${importedCount} bookmarks!`, 'success');
       });
       
     } catch (error) {
-      showMessage('Error reading bookmark file!', 'error');
+      console.error('Error importing bookmarks:', error);
+      showNotification('Failed to import bookmarks. Please check the file format.', 'error');
     }
   };
   
   reader.readAsText(file);
   
   // Reset file input
-  event.target.value = '';
+  document.getElementById('importFileInput').value = '';
 }
 
-function removeBookmark(bookmarkId) {
-  if (confirm('Are you sure you want to remove this bookmark?')) {
-    chrome.storage.local.get(['productiveBookmarks'], (result) => {
-      const bookmarks = result.productiveBookmarks || [];
-      const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== bookmarkId);
+// ========== ALERTS ==========
+function renderAlerts() {
+  const alertList = document.getElementById('alertList');
+  if (!alertList) return;
+
+  // Get current tab to check if it's distracting
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0] && tabs[0].url) {
+      const domain = extractDomain(tabs[0].url);
+      const category = classifySite(domain);
       
-      chrome.storage.local.set({ productiveBookmarks: updatedBookmarks }, () => {
-        loadBookmarks();
-        showMessage('Bookmark removed!', 'success');
+      const alerts = [];
+      
+      if (category === 'distracting') {
+        alerts.push({
+          type: 'warning',
+          message: `You're on a distracting site: ${domain}`,
+          action: 'Start Focus Session',
+          actionFn: () => {
+            switchPage('focus');
+            startFocusSession();
+          }
+        });
+      }
+      
+      // Check for due reminders
+      chrome.storage.local.get(['reminders'], (result) => {
+        const reminders = result.reminders || [];
+        const now = new Date();
+        const dueReminders = reminders.filter(r => 
+          !r.completed && 
+          new Date(r.reminderDateTime) <= now &&
+          new Date(r.reminderDateTime) > new Date(now.getTime() - 60 * 60 * 1000) // Within last hour
+        );
+        
+        dueReminders.forEach(reminder => {
+          alerts.push({
+            type: 'info',
+            message: `Reminder: ${reminder.title}`,
+            action: 'View Calendar',
+            actionFn: () => switchPage('calendar')
+          });
+        });
+        
+        renderAlertsList(alerts);
       });
-    });
-  }
+    } else {
+      renderAlertsList([]);
+    }
+  });
 }
 
-function displayBookmarks(bookmarks, category = 'all') {
-  const container = document.getElementById('bookmarksList');
-  if (!container) return;
-  
-  let filteredBookmarks = bookmarks;
-  if (category !== 'all') {
-    filteredBookmarks = bookmarks.filter(bookmark => bookmark.category === category);
-  }
-  
-  // Sort by time spent (most used first)
-  filteredBookmarks.sort((a, b) => b.timeSpent - a.timeSpent);
-  
-  if (filteredBookmarks.length === 0) {
-    container.innerHTML = `<div class="no-data">No bookmarks in the ${category} category yet.</div>`;
+function renderAlertsList(alerts) {
+  const alertList = document.getElementById('alertList');
+  if (!alertList) return;
+
+  if (alerts.length === 0) {
+    alertList.innerHTML = '<div class="no-data">No alerts at the moment. Keep up the good work! 🎉</div>';
     return;
   }
-  
-  container.innerHTML = filteredBookmarks.map(bookmark => `
-    <div class="bookmark-item">
-      <div class="bookmark-info">
-        <div class="bookmark-favicon" style="background: ${bookmark.isCustom ? '#22d3ee' : '#4ade80'}; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: bold;">
-          ${bookmark.isCustom ? 'C' : 'A'}
-        </div>
-        <div class="bookmark-details">
-          <div class="bookmark-title">${bookmark.title}</div>
-          <div class="bookmark-url">${bookmark.domain} ${bookmark.isCustom ? '• Custom' : '• Auto'}</div>
-        </div>
-      </div>
-      <div class="bookmark-meta">
-        <div class="bookmark-time">${bookmark.timeSpent > 0 ? formatTime(bookmark.timeSpent) : 'New'}</div>
-        <div class="bookmark-category">${bookmark.category}</div>
-      </div>
-      <div style="display: flex; gap: 5px;">
-        <button class="btn" data-action="open" data-url="${bookmark.url}" style="padding: 6px 8px; font-size: 0.8em;">
-          <i class="fas fa-external-link-alt"></i>
-        </button>
-        <button class="btn" data-action="remove" data-id="${bookmark.id}" style="padding: 6px 8px; font-size: 0.8em; background: #f87171;">
-          <i class="fas fa-trash"></i>
-        </button>
-      </div>
-        </button>
-        <button class="btn" onclick="removeBookmark('${bookmark.id}')" style="padding: 6px 8px; font-size: 0.8em; background: #f87171;">
-          <i class="fas fa-trash"></i>
-        </button>
-      </div>
-    </div>
+
+  alertList.innerHTML = alerts.map((alert, index) => `
+    <button class="alert-btn" onclick="handleAlertAction(${index})">
+      ${alert.message} - ${alert.action}
+    </button>
   `).join('');
   
-  // Add event listeners for bookmark actions
-  container.querySelectorAll('[data-action="open"]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const url = e.target.closest('[data-url]').getAttribute('data-url');
-      openBookmark(url);
-    });
-  });
-  
-  container.querySelectorAll('[data-action="remove"]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const id = e.target.closest('[data-id]').getAttribute('data-id');
-      removeBookmark(parseFloat(id));
-    });
-  });
+  // Store alerts for action handling
+  window.currentAlerts = alerts;
 }
 
-function filterBookmarks(category) {
-  chrome.storage.local.get(['productiveBookmarks'], (result) => {
-    const bookmarks = result.productiveBookmarks || [];
-    displayBookmarks(bookmarks, category);
-  });
+function handleAlertAction(index) {
+  if (window.currentAlerts && window.currentAlerts[index]) {
+    window.currentAlerts[index].actionFn();
+  }
 }
 
-function addCustomBookmark() {
-  const title = document.getElementById('customBookmarkTitle').value.trim();
-  const url = document.getElementById('customBookmarkUrl').value.trim();
-  const category = document.getElementById('customBookmarkCategory').value;
-  
-  if (!title || !url) {
-    showMessage('Please enter both title and URL!', 'error');
-    return;
+// ========== UTILITY FUNCTIONS ==========
+function formatTime(minutes) {
+  if (minutes < 60) {
+    return `${minutes}m`;
   }
-  
-  // Validate URL
-  try {
-    new URL(url);
-  } catch (e) {
-    showMessage('Please enter a valid URL!', 'error');
-    return;
-  }
-  
-  const domain = extractDomain(url);
-  
-  chrome.storage.local.get(['productiveBookmarks'], (result) => {
-    const bookmarks = result.productiveBookmarks || [];
-    
-    // Check if bookmark already exists
-    const existingBookmark = bookmarks.find(bookmark => bookmark.domain === domain);
-    if (existingBookmark) {
-      showMessage('This site is already bookmarked!', 'error');
-      return;
-    }
-    
-    const newBookmark = {
-      id: Date.now() + Math.random(),
-      title: title,
-      url: url,
-      domain: domain,
-      category: category,
-      timeSpent: 0,
-      addedAt: new Date().toISOString(),
-      lastVisited: new Date().toISOString(),
-      isCustom: true // Mark as user-added
-    };
-    
-    bookmarks.push(newBookmark);
-    
-    chrome.storage.local.set({ productiveBookmarks: bookmarks }, () => {
-      // Clear form
-      document.getElementById('customBookmarkTitle').value = '';
-      document.getElementById('customBookmarkUrl').value = '';
-      
-      loadBookmarks();
-      showMessage('Bookmark added successfully!', 'success');
-      updateXP(5, 'adding bookmarks');
-    });
-  });
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}h ${mins}m`;
 }
 
-function removeBookmark(bookmarkId) {
-  if (confirm('Are you sure you want to remove this bookmark?')) {
-    chrome.storage.local.get(['productiveBookmarks'], (result) => {
-      const bookmarks = result.productiveBookmarks || [];
-      const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== bookmarkId);
-      
-      chrome.storage.local.set({ productiveBookmarks: updatedBookmarks }, () => {
-        loadBookmarks();
-        showMessage('Bookmark removed successfully!', 'success');
-      });
-    });
-  }
+function getScoreClass(score) {
+  if (score >= 75) return 'good';
+  if (score >= 50) return 'average';
+  return 'poor';
 }
 
 function extractDomain(url) {
@@ -1413,405 +1237,82 @@ function extractDomain(url) {
     return 'unknown';
   }
 }
-function refreshBookmarks() {
-  const button = document.getElementById('refreshBookmarksBtn');
-  if (!button) return;
-  
-  const originalText = button.innerHTML;
-  button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
-  button.disabled = true;
-  
-  // Request background script to update bookmarks
-  chrome.runtime.sendMessage({ type: 'UPDATE_BOOKMARKS' }, (response) => {
-    setTimeout(() => {
-      loadBookmarks();
-      button.innerHTML = '<i class="fas fa-check"></i> Updated!';
-      
-      setTimeout(() => {
-        button.innerHTML = originalText;
-        button.disabled = false;
-      }, 1000);
-      
-      showMessage('Bookmarks refreshed successfully!', 'success');
-    }, 500);
-  });
-}
 
-function exportBookmarks() {
-  chrome.storage.local.get(['productiveBookmarks'], (result) => {
-    const bookmarks = result.productiveBookmarks || [];
-    
-    if (bookmarks.length === 0) {
-      showMessage('No bookmarks to export!', 'error');
-      return;
-    }
-    
-    const exportData = {
-      exportDate: new Date().toISOString(),
-      totalBookmarks: bookmarks.length,
-      bookmarks: bookmarks.map(bookmark => ({
-        title: bookmark.title,
-        url: bookmark.url,
-        domain: bookmark.domain,
-        category: bookmark.category,
-        timeSpent: bookmark.timeSpent,
-        addedAt: bookmark.addedAt
-      }))
-    };
-    
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `productive-bookmarks-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    
-    URL.revokeObjectURL(url);
-    showMessage('Bookmarks exported successfully!', 'success');
-  });
-}
-
-function importBookmarks() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json';
-  
-  input.onchange = function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        const importData = JSON.parse(e.target.result);
-        
-        if (!importData.bookmarks || !Array.isArray(importData.bookmarks)) {
-          showMessage('Invalid bookmark file format!', 'error');
-          return;
-        }
-        
-        chrome.storage.local.get(['productiveBookmarks'], (result) => {
-          const existingBookmarks = result.productiveBookmarks || [];
-          const existingDomains = new Set(existingBookmarks.map(b => b.domain));
-          
-          let importedCount = 0;
-          const newBookmarks = [...existingBookmarks];
-          
-          importData.bookmarks.forEach(bookmark => {
-            if (!existingDomains.has(bookmark.domain)) {
-              newBookmarks.push({
-                ...bookmark,
-                id: Date.now() + Math.random(),
-                addedAt: new Date().toISOString(),
-                isCustom: true
-              });
-              importedCount++;
-            }
-          });
-          
-          chrome.storage.local.set({ productiveBookmarks: newBookmarks }, () => {
-            loadBookmarks();
-            showMessage(`Successfully imported ${importedCount} new bookmarks!`, 'success');
-            if (importedCount > 0) {
-              updateXP(importedCount * 2, 'importing bookmarks');
-            }
-          });
-        });
-        
-      } catch (error) {
-        showMessage('Error reading bookmark file!', 'error');
-      }
-    };
-    
-    reader.readAsText(file);
-  };
-  
-  input.click();
-}
-function openBookmark(url) {
-  chrome.tabs.create({ url: url, active: true })
-    .then(() => {
-      window.close();
-    })
-    .catch(err => {
-      console.error('Error opening bookmark:', err);
-      showMessage('Failed to open bookmark. Please try again.', 'error');
-    });
-}
-
-// ========== UTILITY FUNCTIONS ==========
-async function getTabData() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: 'getTabData' }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Runtime error:', chrome.runtime.lastError);
-        resolve([]);
-      } else {
-        resolve(response?.data || []);
-      }
-    });
-  });
-}
-
-async function getDailyStats(days = 7) {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: 'getDailyStats', days }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Runtime error:', chrome.runtime.lastError);
-        resolve([]);
-      } else {
-        resolve(response?.data || []);
-      }
-    });
-  });
-}
-
-async function getCurrentStats() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: 'getCurrentStats' }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Runtime error:', chrome.runtime.lastError);
-        resolve({ totalTime: 0, productiveTime: 0, distractingTime: 0, focusScore: 0 });
-      } else {
-        resolve(response?.data || { totalTime: 0, productiveTime: 0, distractingTime: 0, focusScore: 0 });
-      }
-    });
-  });
-}
-
-async function getBlockedSites() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({type: 'GET_BLOCKED_SITES'}, (response) => {
-      resolve(response?.sites || []);
-    });
-  });
-}
-
-function getSiteName(site) {
-  // Extract a clean site name from the title or domain
-  if (site.title && site.title !== 'Unknown' && !site.title.includes('chrome://')) {
-    // Clean up common title patterns
-    let name = site.title
-      .replace(/^\(?\d+\)?\s*/, '') // Remove notification counts
-      .replace(/\s*[-–—]\s*.*$/, '') // Remove everything after dash
-      .replace(/\s*\|\s*.*$/, '') // Remove everything after pipe
-      .replace(/\s*•\s*.*$/, '') // Remove everything after bullet
-      .trim();
-    
-    // Limit length
-    if (name.length > 20) {
-      name = name.substring(0, 20) + '...';
-    }
-    
-    return name || site.domain;
-  }
-  
-  // Fallback to domain with nice formatting
-  return site.domain
-    .replace(/^www\./, '')
-    .replace(/\.com$/, '')
-    .replace(/\.org$/, '')
-    .replace(/\.net$/, '')
-    .replace(/\.edu$/, '');
-}
-
-function getScoreClass(score) {
-  if (score >= 75) return 'good';
-  if (score >= 50) return 'average';
-  return 'poor';
-}
-
-function formatTime(minutes) {
-  if (minutes < 1) return '< 1m';
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours}h ${mins}m`;
-}
-
-function updateMotivationalQuote() {
-  const quotes = [
-    "Innovation distinguishes between a leader and a follower. – Steve Jobs",
-    "The only way to do great work is to love what you do. – Steve Jobs",
-    "Success is not final, failure is not fatal: it is the courage to continue that counts. – Winston Churchill",
-    "The future belongs to those who believe in the beauty of their dreams. – Eleanor Roosevelt",
-    "It is during our darkest moments that we must focus to see the light. – Aristotle",
-    "Education is the most powerful weapon which you can use to change the world. – Nelson Mandela"
+function classifySite(domain) {
+  const productiveSites = [
+    'khanacademy.org', 'coursera.org', 'edx.org', 'udemy.com', 'github.com',
+    'stackoverflow.com', 'mdn.mozilla.org', 'w3schools.com', 'scholar.google.com',
+    'wikipedia.org', 'britannica.com', 'ted.com', 'brilliant.org'
   ];
-  
-  const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-  const element = document.getElementById('motivationText');
-  if (element) element.textContent = randomQuote;
-}
 
-async function openFullAnalytics() {
-  try {
-    await chrome.tabs.create({
-      url: chrome.runtime.getURL('dashboard.html'),
-      active: true
-    });
-    window.close();
-  } catch (error) {
-    console.error('Error opening analytics:', error);
+  const distractingSites = [
+    'youtube.com', 'facebook.com', 'instagram.com', 'twitter.com', 'reddit.com',
+    'tiktok.com', 'snapchat.com', 'discord.com', 'twitch.tv', 'netflix.com'
+  ];
+
+  const cleanDomain = domain.toLowerCase();
+  
+  if (productiveSites.some(site => cleanDomain.includes(site) || site.includes(cleanDomain))) {
+    return 'productive';
+  } else if (distractingSites.some(site => cleanDomain.includes(site) || site.includes(cleanDomain))) {
+    return 'distracting';
+  } else {
+    return 'neutral';
   }
 }
 
-async function refreshData() {
+function isValidUrl(string) {
   try {
-    const button = document.getElementById('refreshDataBtn');
-    if (!button) return;
-    
-    const originalText = button.innerHTML;
-    
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
-    button.disabled = true;
-    
-    // Force background script to save current data
-    await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'saveData' }, (response) => {
-        resolve(response);
-      });
-    });
-    
-    // Wait a moment for data to be saved
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    await loadDashboardData();
-    await loadAnalyticsData();
-    await loadUserStats();
-    
-    button.innerHTML = '<i class="fas fa-check"></i> Refreshed!';
-    
-    setTimeout(() => {
-      button.innerHTML = originalText;
-      button.disabled = false;
-    }, 1000);
-    
-    showMessage('Data refreshed successfully!', 'success');
-  } catch (error) {
-    console.error('Error refreshing data:', error);
-    const button = document.getElementById('refreshDataBtn');
-    if (button) {
-      button.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
-      button.disabled = false;
-    }
-    showMessage('Failed to refresh data. Please try again.', 'error');
+    new URL(string);
+    return true;
+  } catch (_) {
+    return false;
   }
 }
 
-function showMessage(message, type = 'info') {
-  const messageDiv = document.createElement('div');
-  messageDiv.className = type === 'error' ? 'error-message' : 'success-message';
-  messageDiv.textContent = message;
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: ${type === 'success' ? 'linear-gradient(135deg, #4ade80, #22d3ee)' : 
+                 type === 'error' ? 'linear-gradient(135deg, #f87171, #ef4444)' : 
+                 'linear-gradient(135deg, #667eea, #764ba2)'};
+    color: white;
+    padding: 15px 25px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    z-index: 10000;
+    font-weight: 600;
+    transform: translateX(400px);
+    transition: transform 0.3s ease;
+  `;
+  notification.textContent = message;
   
-  const content = document.getElementById('mainContent');
-  if (content) {
-    content.insertBefore(messageDiv, content.firstChild);
-    
-    // Remove message after 3 seconds
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+  }, 100);
+  
+  setTimeout(() => {
+    notification.style.transform = 'translateX(400px)';
     setTimeout(() => {
-      if (messageDiv.parentNode) {
-        messageDiv.parentNode.removeChild(messageDiv);
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
       }
-    }, 3000);
-  }
+    }, 300);
+  }, 3000);
 }
 
-function showError(message) {
-  const content = document.getElementById('mainContent');
-  if (content) {
-    content.innerHTML = `
-      <div class="loading">
-        <p>${message}</p>
-        <button class="btn btn-primary reload-btn">
-          Retry
-        </button>
-      </div>
-    `;
-  }
-}
-
-function startAutoUpdate() {
-  // Update data every 30 seconds
-  updateInterval = setInterval(() => {
-    loadDashboardData();
-    loadUserStats();
-  }, 30000);
-}
-
-// Make functions globally available
-window.deleteNote = deleteNote;
+// ========== GLOBAL FUNCTIONS FOR ONCLICK HANDLERS ==========
+window.removeBlockedSite = removeBlockedSite;
+window.addCommonSite = addCommonSite;
 window.updateGoalProgress = updateGoalProgress;
 window.completeGoal = completeGoal;
 window.deleteGoal = deleteGoal;
-window.switchToGoals = switchToGoals;
+window.deleteNote = deleteNote;
 window.completeReminder = completeReminder;
 window.deleteReminder = deleteReminder;
-window.openBookmark = openBookmark;
-window.removeBookmark = removeBookmark;
-window.removeBookmark = removeBookmark;
-
-// Listen for data updates
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'data_updated') {
-    loadDashboardData();
-    loadUserStats();
-  }
-});
-
-// Cleanup on unload
-window.addEventListener('beforeunload', () => {
-  if (updateInterval) {
-    clearInterval(updateInterval);
-  }
-  if (focusTimer) {
-    clearInterval(focusTimer);
-  }
-});
-
-function renderAlerts() {
-  const alertList = document.getElementById('alertList');
-  if (!alertList) return;
-  alertList.innerHTML = '';
-
-  chrome.storage.local.get(['goals', 'reminders'], (result) => {
-    const goals = result.goals || [];
-    const reminders = result.reminders || [];
-    const activeGoals = goals.filter(g => !g.completed && g.progress < g.target).length;
-    const reminderCount = reminders.length;
-    let hasAlert = false;
-
-    if (reminderCount > 0) {
-      const btn = document.createElement('button');
-      btn.className = 'alert-btn';
-      btn.textContent = `You now have ${reminderCount} reminder${reminderCount === 1 ? '' : 's'} set.`;
-      btn.onclick = (e) => {
-        e.preventDefault();
-        const navBtn = document.querySelector('.nav-btn[data-page="calendar"]');
-        if (navBtn) navBtn.click();
-      };
-      alertList.appendChild(btn);
-      hasAlert = true;
-    }
-    if (activeGoals > 0) {
-      const btn = document.createElement('button');
-      btn.className = 'alert-btn';
-      btn.textContent = `You now have ${activeGoals} active goal${activeGoals === 1 ? '' : 's'}.`;
-      btn.onclick = (e) => {
-        e.preventDefault();
-        if (typeof switchToGoals === 'function') switchToGoals();
-      };
-      alertList.appendChild(btn);
-      hasAlert = true;
-    }
-    if (!hasAlert) {
-      const div = document.createElement('div');
-      div.className = 'alert-btn';
-      div.textContent = 'No alerts.';
-      div.style.opacity = '0.7';
-      alertList.appendChild(div);
-    }
-  });
-}
+window.handleAlertAction = handleAlertAction;
