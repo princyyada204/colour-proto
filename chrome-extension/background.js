@@ -468,6 +468,8 @@ class StudyFlowTracker {
 // Initialize the web monitoring tracker
 const studyFlowTracker = new StudyFlowTracker();
 
+// Set up weekly cleanup of old data
+chrome.alarms.create('weeklyCleanup', { periodInMinutes: 10080 }); // 7 days
 // ========== REMINDER SYSTEM ==========
 
 // Check for due reminders every minute
@@ -476,6 +478,8 @@ chrome.alarms.create('checkReminders', { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'checkReminders') {
     checkDueReminders();
+  } else if (alarm.name === 'weeklyCleanup') {
+    studyFlowTracker.cleanupOldData(30); // Keep 30 days of data
   } else if (alarm.name === 'dailyMotivation') {
     chrome.notifications.create({
       type: 'basic',

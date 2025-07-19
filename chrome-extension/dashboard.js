@@ -4,18 +4,24 @@ class DashboardController {
   constructor() {
     this.currentTab = 'overview';
     this.updateInterval = null;
+    this.lastUpdateDate = null;
     this.initializeDashboard();
     this.startAutoUpdate();
   }
 
   async initializeDashboard() {
     try {
+      this.lastUpdateDate = this.getToday();
       await this.loadAndRenderData();
       this.setupTabNavigation();
     } catch (error) {
       console.error('Error initializing dashboard:', error);
       this.showError('Failed to load dashboard data');
     }
+  }
+
+  getToday() {
+    return new Date().toISOString().split('T')[0];
   }
 
   setupTabNavigation() {
@@ -51,6 +57,27 @@ class DashboardController {
   }
 
   async loadAndRenderData() {
+    // Check if we need to refresh for a new day
+    const today = this.getToday();
+    if (this.lastUpdateDate !== today) {
+      console.log('New day detected, refreshing data...');
+      this.lastUpdateDate = today;
+      
+      // Force a data refresh from background
+      try {
+        await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ type: 'forceReset' }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.error('Error forcing reset:', chrome.runtime.lastError);
+            }
+            resolve();
+          });
+        });
+      } catch (error) {
+        console.error('Error forcing daily reset:', error);
+      }
+    }
+    
     const [tabData, dailyStats] = await Promise.all([
       this.getTabData(),
       this.getDailyStats(7)
@@ -68,7 +95,13 @@ class DashboardController {
           console.error('Runtime error:', chrome.runtime.lastError);
           resolve([]);
         } else {
-          resolve(response?.data || []);
+          // Ensure we only get today's data
+          const today = this.getToday();
+          const todayData = (response?.data || []).filter(tab => {
+            const tabDate = new Date(tab.lastAccessed).toISOString().split('T')[0];
+            return tabDate === today;
+          });
+          resolve(todayData);
         }
       });
     });
@@ -87,6 +120,23 @@ class DashboardController {
     });
   }
 
+  async forceDataRefresh() {
+    try {
+      // Force save current data
+      await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: 'saveData' }, () => {
+          resolve();
+        });
+      });
+      
+      // Reload and render
+      await this.loadAndRenderData();
+      
+      console.log('Data refresh completed');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    }
+  }
   renderOverview(tabData, dailyStats) {
     const today = dailyStats[dailyStats.length - 1] || {
       totalTime: 0,
@@ -436,9 +486,16 @@ class DashboardController {
   }
 
   startAutoUpdate() {
-    // Update dashboard every 30 seconds
+    // Update dashboard every 30 seconds and check for day change
     this.updateInterval = setInterval(() => {
-      this.loadAndRenderData();
+      const today = this.getToday();
+      if (this.lastUpdateDate !== today) {
+        console.log('Day changed, forcing full refresh...');
+        this.lastUpdateDate = today;
+        this.forceDataRefresh();
+      } else {
+        this.loadAndRenderData();
+      }
     }, 30000);
   }
 
@@ -463,7 +520,8 @@ const dashboardController = new DashboardController();
 
 // Listen for data updates
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'data_updated') {
+  if (request.action === 'data_updated' || request.action === 'daily_reset') {
+    console.log('Received update message:', request.action);
     dashboardController.loadAndRenderData();
   }
 });
